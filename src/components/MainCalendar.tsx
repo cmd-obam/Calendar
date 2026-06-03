@@ -23,9 +23,6 @@ function formatKRW(n: number): string {
   return `${n.toLocaleString('ko-KR')}원`
 }
 
-function formatWageAmount(n: number): string {
-  return Math.round(n).toLocaleString('ko-KR')
-}
 
 const AppFrame = styled.div`
   width: 100%;
@@ -395,37 +392,16 @@ const LogTitle = styled.span`
   white-space: nowrap;
 `
 
-const LogWage = styled.div`
-  display: flex;
-  min-width: 0;
+const LogWage = styled.span`
+  display: block;
   width: 100%;
-  max-width: 100%;
-  align-items: baseline;
-  gap: 0.06rem;
-  overflow: hidden;
-  white-space: nowrap;
-  line-height: 1.15;
-`
-
-const LogWageAmount = styled.span`
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.625rem;
   font-weight: 900;
-  letter-spacing: -0.03em;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
   color: var(--cal-accent-strong, #4338ca);
-`
-
-const LogWageUnit = styled.span`
-  flex-shrink: 0;
-  font-size: 0.5625rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--cal-text-dim, #6b7280);
-  white-space: nowrap;
 `
 
 export default function MainCalendar() {
@@ -649,10 +625,7 @@ export default function MainCalendar() {
                         <LogBadge>
                           <LogTitle title={log.title}>{log.title}</LogTitle>
                           <LogWage title={formatKRW(log.finalWage)}>
-                            <LogWageAmount>
-                              {formatWageAmount(log.finalWage)}
-                            </LogWageAmount>
-                            <LogWageUnit>원</LogWageUnit>
+                            {formatKRW(log.finalWage)}
                           </LogWage>
                         </LogBadge>
                       )}

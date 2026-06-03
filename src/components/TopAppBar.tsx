@@ -5,7 +5,10 @@ import {
   WELCOME_BANNER_MESSAGE,
 } from '../data/notices'
 
+/** 진입·퇴장 transform 애니메이션 (CSS duration-700과 동일) */
 const TRANSITION_MS = 700
+/** transitionend 여유 + 리플로우 버퍼 */
+const TRANSITION_BUFFER_MS = 80
 const HOLD_MS = 4000
 
 type SlidePhase = 'enter' | 'hold' | 'exit'
@@ -30,13 +33,13 @@ const SLIDE_MOTION =
 function visualClass(visual: SlideVisual): string {
   switch (visual) {
     case 'wait':
-      return `${SLIDE_MOTION} translate-x-full opacity-0`
+      return `${SLIDE_MOTION} translate-x-full opacity-100`
     case 'wait-snap':
       return 'translate-x-full opacity-0 transition-none'
     case 'active':
       return `${SLIDE_MOTION} translate-x-0 opacity-100`
     case 'exit':
-      return `${SLIDE_MOTION} -translate-x-full opacity-0`
+      return `${SLIDE_MOTION} -translate-x-full opacity-100`
   }
 }
 
@@ -87,6 +90,8 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
         })
       })
 
+    const waitTransition = () => sleep(TRANSITION_MS + TRANSITION_BUFFER_MS)
+
     const runCycle = async () => {
       let index = 0
 
@@ -101,7 +106,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
 
       while (!cancelledRef.current) {
         setPhase('exit')
-        await sleep(TRANSITION_MS)
+        await waitTransition()
 
         if (cancelledRef.current) return
 
@@ -109,6 +114,9 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
         const next = nextIndex(prev)
 
         setSnapIndex(prev)
+        await sleep(16)
+
+        if (cancelledRef.current) return
         setActiveIndex(next)
         setPhase('enter')
         await waitPaint()
