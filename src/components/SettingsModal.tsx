@@ -1,32 +1,38 @@
 import styled from '@emotion/styled'
 import { useCallback, useEffect, useState } from 'react'
+import { LATEST_NOTICE_ALERT_DETAIL } from '../data/notices'
 
-const SETTINGS_ITEMS = [
-  {
-    id: 'notice',
-    icon: '📢',
-    label: '공지사항',
-    alertMessage: '공지사항 메뉴입니다.',
-  },
-  {
-    id: 'terms',
-    icon: '📜',
-    label: '이용약관',
-    alertMessage: '이용약관 메뉴입니다.',
-  },
-  {
-    id: 'privacy',
-    icon: '🔒',
-    label: '개인정보처리방침',
-    alertMessage: '개인정보처리방침 메뉴입니다.',
-  },
-  {
-    id: 'general',
-    icon: '⚙️',
-    label: '일반 설정',
-    alertMessage: '일반 설정 메뉴입니다.',
-  },
-] as const
+type ExpandedSection = null | 'terms' | 'privacy' | 'general'
+
+const TERMS_PLACEHOLDER = `제1조 (목적)
+본 약관은 급여 캘린더 서비스(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리·의무를 규정함을 목적으로 합니다.
+
+제2조 (서비스의 제공)
+① 회사는 근무 일정 및 급여 기록 관리 기능을 제공합니다.
+② 서비스 내용은 운영상 필요에 따라 변경될 수 있습니다.
+
+제3조 (이용자의 의무)
+이용자는 관련 법령 및 본 약관을 준수하여 서비스를 이용하여야 합니다.
+
+(임시 약관 본문 — 추후 정식 문구로 교체 예정)`
+
+const PRIVACY_PLACEHOLDER = `개인정보처리방침 (임시 안내)
+
+1. 수집 항목
+- 이메일 주소(선택): 공지·고객 지원 연락 시
+- 디바이스 토큰(FCM 등): 푸시 알림 발송을 위한 기기 식별
+
+2. 이용 목적
+- 서비스 운영 및 푸시 알림 전달
+- 문의 응대 및 공지사항 안내
+
+3. 보관 및 파기
+수집 목적 달성 후 지체 없이 파기하며, 관련 법령에 따른 보관이 필요한 경우 해당 기간 동안 보관합니다.
+
+4. 이용자 권리
+이용자는 언제든지 알림 설정을 해제하거나 문의를 통해 삭제를 요청할 수 있습니다.
+
+(임시 안내 — 추후 정식 방침으로 교체 예정)`
 
 const Root = styled.div<{ $open: boolean }>`
   position: fixed;
@@ -109,13 +115,15 @@ const List = styled.ul`
   margin: 0;
   padding: 0.5rem 0.65rem 0.75rem;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 `
 
 const ListItem = styled.li`
-  margin: 0;
+  margin: 0 0 0.25rem;
 `
 
-const ListButton = styled.button`
+const ListButton = styled.button<{ $expanded?: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
@@ -123,7 +131,8 @@ const ListButton = styled.button`
   padding: 0.85rem 0.75rem;
   border: none;
   border-radius: 14px;
-  background: transparent;
+  background: ${({ $expanded }) =>
+    $expanded ? 'var(--cal-accent-soft, #eef2ff)' : 'transparent'};
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -149,12 +158,31 @@ const ItemLabel = styled.span`
   letter-spacing: -0.02em;
 `
 
-const Chevron = styled.span`
+const Chevron = styled.span<{ $expanded?: boolean }>`
   flex-shrink: 0;
   font-size: 1rem;
   font-weight: 900;
   color: var(--cal-text-dim, #9ca3af);
   line-height: 1;
+  transform: rotate(${({ $expanded }) => ($expanded ? '90deg' : '0')});
+  transition: transform 0.2s ease;
+`
+
+const SubPanel = styled.div`
+  margin: 0 0.35rem 0.5rem;
+  padding: 0.75rem 0.85rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-radius: 12px;
+  background: var(--cal-muted, #f9fafb);
+  border: 1px solid var(--cal-border, #e5e7eb);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--cal-text-dim, #4b5563);
+  white-space: pre-wrap;
+  word-break: break-word;
 `
 
 const CloseRow = styled.div`
@@ -188,10 +216,15 @@ export interface SettingsModalProps {
 
 export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [visible, setVisible] = useState(false)
+  const [expanded, setExpanded] = useState<ExpandedSection>(null)
+  const [isNotificationOn, setIsNotificationOn] = useState(true)
 
   useEffect(() => {
     if (!open) {
-      const id = requestAnimationFrame(() => setVisible(false))
+      const id = requestAnimationFrame(() => {
+        setVisible(false)
+        setExpanded(null)
+      })
       return () => cancelAnimationFrame(id)
     }
     const id = requestAnimationFrame(() => setVisible(true))
@@ -208,8 +241,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
     window.setTimeout(onClose, 280)
   }, [onClose])
 
-  const handleItemClick = useCallback((message: string) => {
-    window.alert(message)
+  const toggleSection = useCallback((section: ExpandedSection) => {
+    setExpanded((cur) => (cur === section ? null : section))
+  }, [])
+
+  const handleNoticeClick = useCallback(() => {
+    window.alert(LATEST_NOTICE_ALERT_DETAIL)
   }, [])
 
   if (!open && !visible) return null
@@ -234,18 +271,94 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
           </Head>
 
           <List>
-            {SETTINGS_ITEMS.map((item) => (
-              <ListItem key={item.id}>
-                <ListButton
-                  type="button"
-                  onClick={() => handleItemClick(item.alertMessage)}
-                >
-                  <ItemIcon aria-hidden>{item.icon}</ItemIcon>
-                  <ItemLabel>{item.label}</ItemLabel>
-                  <Chevron aria-hidden>›</Chevron>
-                </ListButton>
-              </ListItem>
-            ))}
+            <ListItem>
+              <ListButton type="button" onClick={handleNoticeClick}>
+                <ItemIcon aria-hidden>📢</ItemIcon>
+                <ItemLabel>공지사항</ItemLabel>
+                <Chevron aria-hidden>›</Chevron>
+              </ListButton>
+            </ListItem>
+
+            <ListItem>
+              <ListButton
+                type="button"
+                $expanded={expanded === 'terms'}
+                onClick={() => toggleSection('terms')}
+                aria-expanded={expanded === 'terms'}
+              >
+                <ItemIcon aria-hidden>📜</ItemIcon>
+                <ItemLabel>이용약관</ItemLabel>
+                <Chevron $expanded={expanded === 'terms'} aria-hidden>
+                  ›
+                </Chevron>
+              </ListButton>
+              {expanded === 'terms' && (
+                <SubPanel>{TERMS_PLACEHOLDER}</SubPanel>
+              )}
+            </ListItem>
+
+            <ListItem>
+              <ListButton
+                type="button"
+                $expanded={expanded === 'privacy'}
+                onClick={() => toggleSection('privacy')}
+                aria-expanded={expanded === 'privacy'}
+              >
+                <ItemIcon aria-hidden>🔒</ItemIcon>
+                <ItemLabel>개인정보처리방침</ItemLabel>
+                <Chevron $expanded={expanded === 'privacy'} aria-hidden>
+                  ›
+                </Chevron>
+              </ListButton>
+              {expanded === 'privacy' && (
+                <SubPanel>{PRIVACY_PLACEHOLDER}</SubPanel>
+              )}
+            </ListItem>
+
+            <ListItem>
+              <ListButton
+                type="button"
+                $expanded={expanded === 'general'}
+                onClick={() => toggleSection('general')}
+                aria-expanded={expanded === 'general'}
+              >
+                <ItemIcon aria-hidden>⚙️</ItemIcon>
+                <ItemLabel>일반 설정</ItemLabel>
+                <Chevron $expanded={expanded === 'general'} aria-hidden>
+                  ›
+                </Chevron>
+              </ListButton>
+              {expanded === 'general' && (
+                <div className="mx-1 mb-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <span className="min-w-0 text-sm font-bold text-gray-800">
+                      🔔 푸시 알림 설정
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isNotificationOn}
+                      aria-label="푸시 알림"
+                      onClick={() => setIsNotificationOn((v) => !v)}
+                      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300 ease-in-out ${
+                        isNotificationOn ? 'bg-indigo-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-300 ease-in-out ${
+                          isNotificationOn ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-snug text-gray-500">
+                    {isNotificationOn
+                      ? '알림이 켜져 있습니다.'
+                      : '알림이 꺼져 있습니다.'}
+                  </p>
+                </div>
+              )}
+            </ListItem>
           </List>
 
           <CloseRow>

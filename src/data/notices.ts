@@ -1,18 +1,8 @@
-export interface Notice {
-  id: string
-  message: string
-}
+export const WELCOME_BANNER_MESSAGE =
+  '👤 한찬우님 환영합니다! 오늘 하루도 힘내세요! 💪'
 
-/** 등록 순서대로 쌓이며, 전광판에는 마지막(최신) 항목만 표시 */
-export const NOTICES: Notice[] = [
-  {
-    id: 'notice-1',
-    message:
-      '📢 [안내] 최신 업데이트: 근무지별 시급 설정 및 모바일 최적화 레이아웃이 적용되었습니다!',
-  },
-]
+export const LATEST_NOTICE_BANNER_MESSAGE =
+  '📢 공지: 근무지별 시급 설정 기능이 업데이트되었습니다!'
 
-export function getLatestNotice(): Notice | undefined {
-  if (NOTICES.length === 0) return undefined
-  return NOTICES[NOTICES.length - 1]
-}
+export const LATEST_NOTICE_ALERT_DETAIL =
+  '📢 [안내] 최신 업데이트: 근무지별 시급 설정 및 모바일 최적화 레이아웃이 적용되었습니다!'

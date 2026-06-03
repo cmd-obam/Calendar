@@ -1,22 +1,5 @@
 @import 'tailwindcss';
 
-/* 공지 전광판: 우→좌 약 13초 흐름 + 약 3.5초 대기 후 반복 (총 16.5초) */
-@keyframes notice-marquee {
-  0% {
-    transform: translateX(100%);
-  }
-  78.8% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
-}
-
-.animate-notice-marquee {
-  animation: notice-marquee 16.5s linear infinite;
-}
-
 /* 모바일 웹앱 베이스: 더블탭/포커스 시 의도치 않은 확대 완화는 viewport + 입력 폰트 크기(16px+)와 함께 사용하세요. */
 
 *,
