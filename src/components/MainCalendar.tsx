@@ -2,6 +2,8 @@ import styled from '@emotion/styled'
 import { useCallback, useMemo, useState } from 'react'
 import CalendarEntryModal from './CalendarEntryModal'
 import MonthlyReportModal from './MonthlyReportModal'
+import SettingsModal from './SettingsModal'
+import TopAppBar from './TopAppBar'
 import { sumMonthlyTotalIncome } from '../lib/monthlySettlement'
 import { useWageStore } from '../store/useWageStore'
 import { getHolidayName } from '../utils/holidays'
@@ -406,6 +408,7 @@ export default function MainCalendar() {
   const [cursor, setCursor] = useState(() => new Date())
   const [reportOpen, setReportOpen] = useState(false)
   const [showAmounts, setShowAmounts] = useState(true)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   const year = cursor.getFullYear()
   const monthIndex = cursor.getMonth()
@@ -478,6 +481,8 @@ export default function MainCalendar() {
 
   return (
     <AppFrame>
+      <TopAppBar onOpenSettings={() => setIsSettingsOpen(true)} />
+
       <Card>
         <Dashboard>
           <MonthNav>
@@ -636,6 +641,11 @@ export default function MainCalendar() {
         year={year}
         monthIndex={monthIndex}
         workLogs={workLogs}
+      />
+
+      <SettingsModal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </AppFrame>
   )
