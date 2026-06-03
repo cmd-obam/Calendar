@@ -28,7 +28,7 @@ const BANNER_SLIDES = [
 ] as const
 
 const SLIDE_MOTION =
-  'transition-[transform,opacity] duration-700 ease-in-out will-change-transform'
+  'transition-all duration-700 ease-in-out will-change-transform'
 
 function visualClass(visual: SlideVisual): string {
   switch (visual) {
@@ -48,7 +48,9 @@ function resolveVisual(
   activeIndex: number,
   phase: SlidePhase,
   snapIndex: number | null,
+  exitingIndex: number | null,
 ): SlideVisual {
+  if (exitingIndex !== null && slideIndex === exitingIndex) return 'exit'
   if (snapIndex === slideIndex) return 'wait-snap'
   if (slideIndex !== activeIndex) return 'wait'
   switch (phase) {
@@ -73,6 +75,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const [phase, setPhase] = useState<SlidePhase>('enter')
   const [snapIndex, setSnapIndex] = useState<number | null>(null)
+  const [exitingIndex, setExitingIndex] = useState<number | null>(null)
   const cancelledRef = useRef(false)
 
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
 
       setActiveIndex(index)
       setSnapIndex(null)
+      setExitingIndex(null)
       setPhase('enter')
       await waitPaint()
 
@@ -106,6 +110,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
 
       while (!cancelledRef.current) {
         setPhase('exit')
+        setExitingIndex(index)
         await waitTransition()
 
         if (cancelledRef.current) return
@@ -113,8 +118,9 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
         const prev = index
         const next = nextIndex(prev)
 
+        setExitingIndex(null)
         setSnapIndex(prev)
-        await sleep(16)
+        await sleep(TRANSITION_BUFFER_MS)
 
         if (cancelledRef.current) return
         setActiveIndex(next)
@@ -157,7 +163,13 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
         >
           <div className="relative flex h-9 w-full items-center justify-center overflow-hidden">
             {BANNER_SLIDES.map((slide, index) => {
-              const visual = resolveVisual(index, activeIndex, phase, snapIndex)
+              const visual = resolveVisual(
+                index,
+                activeIndex,
+                phase,
+                snapIndex,
+                exitingIndex,
+              )
               const isActiveSlide = index === activeIndex
               const className = `absolute max-w-none whitespace-nowrap px-1 text-xs font-semibold leading-snug text-gray-700 ${visualClass(visual)} ${
                 isActiveSlide && isNoticeInteractive

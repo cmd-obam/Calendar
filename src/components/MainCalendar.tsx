@@ -375,8 +375,14 @@ const LogBadge = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.06rem;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
+`
+
+const LogTitleWrap = styled.div`
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
 `
 
 const LogTitle = styled.span`
@@ -394,12 +400,11 @@ const LogTitle = styled.span`
 
 const LogWage = styled.span`
   display: block;
-  width: 100%;
+  width: max-content;
+  max-width: none;
   white-space: nowrap;
-  font-size: 0.625rem;
   font-weight: 900;
   line-height: 1.15;
-  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   color: var(--cal-accent-strong, #4338ca);
 `
@@ -623,8 +628,13 @@ export default function MainCalendar() {
                       )}
                       {showAmounts && log && (
                         <LogBadge>
-                          <LogTitle title={log.title}>{log.title}</LogTitle>
-                          <LogWage title={formatKRW(log.finalWage)}>
+                          <LogTitleWrap>
+                            <LogTitle title={log.title}>{log.title}</LogTitle>
+                          </LogTitleWrap>
+                          <LogWage
+                            className="text-[10px] tracking-tighter whitespace-nowrap"
+                            title={formatKRW(log.finalWage)}
+                          >
                             {formatKRW(log.finalWage)}
                           </LogWage>
                         </LogBadge>
