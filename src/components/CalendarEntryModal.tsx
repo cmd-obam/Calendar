@@ -13,6 +13,7 @@ import {
   useWageStore,
 } from '../store/useWageStore'
 import type { Template } from '../store/useWageStore'
+import { getHolidayName } from '../utils/holidays'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -233,7 +234,7 @@ const Scroll = styled.div`
 `
 
 const DateHeadline = styled.h2`
-  margin: 0 0 0.2rem;
+  margin: 0;
   font-size: 1.15rem;
   font-weight: 900;
   letter-spacing: -0.04em;
@@ -682,6 +683,10 @@ export default function CalendarEntryModal({
     () => (selectedDate ? workLogs[selectedDate] : undefined),
     [selectedDate, workLogs],
   )
+  const holidayName = useMemo(
+    () => (selectedDate ? getHolidayName(selectedDate) : undefined),
+    [selectedDate],
+  )
   const hasExistingRecord = existingRecord != null
 
   const [sheetVisible, setSheetVisible] = useState(false)
@@ -939,9 +944,16 @@ export default function CalendarEntryModal({
             <HeaderBlock>
               <HeaderRow>
                 <HeaderText>
-                  <DateHeadline id="cal-entry-date-title">
-                    {formatKoreanTitleDate(selectedDate)}
-                  </DateHeadline>
+                  <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <DateHeadline id="cal-entry-date-title">
+                      {formatKoreanTitleDate(selectedDate)}
+                    </DateHeadline>
+                    {holidayName && (
+                      <span className="inline-flex max-w-full shrink-0 items-center rounded-md bg-red-50 px-2 py-0.5 text-sm font-bold leading-snug text-red-500 ring-1 ring-inset ring-red-200/90">
+                        {holidayName}
+                      </span>
+                    )}
+                  </div>
                   <Hint>
                     {isAddingTemplate
                       ? '제목과 실제 입금액을 입력한 뒤 템플릿을 저장하세요'
