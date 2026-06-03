@@ -5,26 +5,61 @@ import {
   WELCOME_BANNER_MESSAGE,
 } from '../data/notices'
 
-const ENTER_MS = 520
+const TRANSITION_MS = 700
 const HOLD_MS = 4000
-const EXIT_MS = 520
 
-type BannerStep = 'welcome' | 'notice'
-type SlideMotion = 'off-right' | 'center' | 'off-left'
+type SlidePhase = 'enter' | 'hold' | 'exit'
+type SlideVisual = 'wait' | 'active' | 'exit' | 'wait-snap'
 
-function messageForStep(step: BannerStep): string {
-  return step === 'welcome' ? WELCOME_BANNER_MESSAGE : LATEST_NOTICE_BANNER_MESSAGE
+const BANNER_SLIDES = [
+  {
+    id: 'welcome',
+    message: WELCOME_BANNER_MESSAGE,
+    clickable: false,
+  },
+  {
+    id: 'notice',
+    message: LATEST_NOTICE_BANNER_MESSAGE,
+    clickable: true,
+  },
+] as const
+
+const SLIDE_MOTION =
+  'transition-[transform,opacity] duration-700 ease-in-out will-change-transform'
+
+function visualClass(visual: SlideVisual): string {
+  switch (visual) {
+    case 'wait':
+      return `${SLIDE_MOTION} translate-x-full opacity-0`
+    case 'wait-snap':
+      return 'translate-x-full opacity-0 transition-none'
+    case 'active':
+      return `${SLIDE_MOTION} translate-x-0 opacity-100`
+    case 'exit':
+      return `${SLIDE_MOTION} -translate-x-full opacity-0`
+  }
 }
 
-function slidePositionClass(motion: SlideMotion): string {
-  switch (motion) {
-    case 'off-right':
-      return 'left-full translate-x-0'
-    case 'center':
-      return 'left-1/2 -translate-x-1/2'
-    case 'off-left':
-      return 'left-0 -translate-x-full'
+function resolveVisual(
+  slideIndex: number,
+  activeIndex: number,
+  phase: SlidePhase,
+  snapIndex: number | null,
+): SlideVisual {
+  if (snapIndex === slideIndex) return 'wait-snap'
+  if (slideIndex !== activeIndex) return 'wait'
+  switch (phase) {
+    case 'enter':
+      return 'wait'
+    case 'hold':
+      return 'active'
+    case 'exit':
+      return 'exit'
   }
+}
+
+function nextIndex(current: number): number {
+  return (current + 1) % BANNER_SLIDES.length
 }
 
 export interface TopAppBarProps {
@@ -32,8 +67,9 @@ export interface TopAppBarProps {
 }
 
 export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
-  const [step, setStep] = useState<BannerStep>('welcome')
-  const [motion, setMotion] = useState<SlideMotion>('off-right')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [phase, setPhase] = useState<SlidePhase>('enter')
+  const [snapIndex, setSnapIndex] = useState<number | null>(null)
   const cancelledRef = useRef(false)
 
   useEffect(() => {
@@ -44,23 +80,45 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
         window.setTimeout(resolve, ms)
       })
 
+    const waitPaint = () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve())
+        })
+      })
+
     const runCycle = async () => {
-      let currentStep: BannerStep = 'welcome'
+      let index = 0
+
+      setActiveIndex(index)
+      setSnapIndex(null)
+      setPhase('enter')
+      await waitPaint()
+
+      if (cancelledRef.current) return
+      setPhase('hold')
+      await sleep(HOLD_MS)
 
       while (!cancelledRef.current) {
-        setStep(currentStep)
-        setMotion('off-right')
-        await sleep(32)
+        setPhase('exit')
+        await sleep(TRANSITION_MS)
 
         if (cancelledRef.current) return
-        setMotion('center')
-        await sleep(ENTER_MS + HOLD_MS)
+
+        const prev = index
+        const next = nextIndex(prev)
+
+        setSnapIndex(prev)
+        setActiveIndex(next)
+        setPhase('enter')
+        await waitPaint()
 
         if (cancelledRef.current) return
-        setMotion('off-left')
-        await sleep(EXIT_MS)
+        setSnapIndex(null)
+        setPhase('hold')
+        await sleep(HOLD_MS)
 
-        currentStep = currentStep === 'welcome' ? 'notice' : 'welcome'
+        index = next
       }
     }
 
@@ -71,9 +129,10 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
     }
   }, [])
 
-  const isNoticeInteractive = step === 'notice' && motion === 'center'
+  const isNoticeInteractive =
+    activeIndex === 1 && phase === 'hold' && BANNER_SLIDES[1].clickable
 
-  const handleBannerClick = useCallback(() => {
+  const handleNoticeClick = useCallback(() => {
     if (!isNoticeInteractive) return
     window.alert(LATEST_NOTICE_ALERT_DETAIL)
   }, [isNoticeInteractive])
@@ -84,25 +143,51 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
       aria-label="앱 상단 바"
     >
       <div className="flex min-w-0 items-center gap-2 overflow-hidden px-3 py-2.5">
-        <div className="relative h-9 min-w-0 flex-1 overflow-hidden">
-          <button
-            type="button"
-            disabled={!isNoticeInteractive}
-            className={`absolute top-1/2 -translate-y-1/2 max-w-none whitespace-nowrap px-1 py-1 text-xs font-semibold leading-snug transition-[left,transform] duration-500 ease-in-out ${slidePositionClass(motion)} ${
-              isNoticeInteractive
-                ? 'cursor-pointer rounded-md text-gray-700 active:bg-gray-100'
-                : 'pointer-events-none cursor-default text-gray-700'
-            }`}
-            onClick={handleBannerClick}
-            aria-live="polite"
-            aria-label={
-              isNoticeInteractive
-                ? `최신 공지: ${LATEST_NOTICE_BANNER_MESSAGE}. 탭하여 전체 보기`
-                : messageForStep(step)
-            }
-          >
-            {messageForStep(step)}
-          </button>
+        <div
+          className="relative h-9 min-w-0 flex-1 overflow-hidden"
+          aria-live="polite"
+        >
+          <div className="relative flex h-9 w-full items-center justify-center overflow-hidden">
+            {BANNER_SLIDES.map((slide, index) => {
+              const visual = resolveVisual(index, activeIndex, phase, snapIndex)
+              const isActiveSlide = index === activeIndex
+              const className = `absolute max-w-none whitespace-nowrap px-1 text-xs font-semibold leading-snug text-gray-700 ${visualClass(visual)} ${
+                isActiveSlide && isNoticeInteractive
+                  ? 'cursor-pointer rounded-md active:bg-gray-100'
+                  : 'pointer-events-none'
+              }`
+
+              if (slide.clickable) {
+                return (
+                  <button
+                    key={slide.id}
+                    type="button"
+                    disabled={!isNoticeInteractive}
+                    className={className}
+                    onClick={handleNoticeClick}
+                    aria-hidden={!isActiveSlide || phase !== 'hold'}
+                    aria-label={
+                      isNoticeInteractive
+                        ? `최신 공지: ${slide.message}. 탭하여 전체 보기`
+                        : undefined
+                    }
+                  >
+                    {slide.message}
+                  </button>
+                )
+              }
+
+              return (
+                <span
+                  key={slide.id}
+                  className={className}
+                  aria-hidden={!isActiveSlide || phase !== 'hold'}
+                >
+                  {slide.message}
+                </span>
+              )
+            })}
+          </div>
         </div>
 
         <button

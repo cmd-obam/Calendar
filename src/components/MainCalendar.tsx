@@ -23,6 +23,10 @@ function formatKRW(n: number): string {
   return `${n.toLocaleString('ko-KR')}원`
 }
 
+function formatWageAmount(n: number): string {
+  return Math.round(n).toLocaleString('ko-KR')
+}
+
 const AppFrame = styled.div`
   width: 100%;
   min-width: 0;
@@ -293,7 +297,7 @@ const DayCell = styled.button<{
   max-width: 100%;
   width: 100%;
   min-height: 4.5rem;
-  padding: 0.3rem 0.25rem 0.34rem 0.375rem;
+  padding: 0.26rem 0.2rem 0.3rem 0.28rem;
   border: none;
   border-radius: 10px;
   overflow: hidden;
@@ -367,35 +371,61 @@ const LogBadge = styled.div`
   min-width: 0;
   width: 100%;
   margin-top: auto;
-  padding: 0.18rem 0.28rem;
+  padding: 0.14rem 0.2rem;
   border-radius: 6px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.22);
   display: flex;
   flex-direction: column;
-  gap: 0.08rem;
+  gap: 0.06rem;
   overflow: hidden;
   box-sizing: border-box;
 `
 
 const LogTitle = styled.span`
+  display: block;
   min-width: 0;
-  font-size: 0.58rem;
+  width: 100%;
+  font-size: 0.5625rem;
   font-weight: 700;
   line-height: 1.2;
   color: var(--cal-text, #111827);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
-const LogWage = styled.span`
-  font-size: 0.55rem;
+const LogWage = styled.div`
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 0.06rem;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1.15;
+`
+
+const LogWageAmount = styled.span`
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.625rem;
   font-weight: 900;
+  letter-spacing: -0.03em;
   color: var(--cal-accent-strong, #4338ca);
+`
+
+const LogWageUnit = styled.span`
+  flex-shrink: 0;
+  font-size: 0.5625rem;
+  font-weight: 800;
   letter-spacing: -0.02em;
+  color: var(--cal-text-dim, #6b7280);
+  white-space: nowrap;
 `
 
 export default function MainCalendar() {
@@ -617,8 +647,13 @@ export default function MainCalendar() {
                       )}
                       {showAmounts && log && (
                         <LogBadge>
-                          <LogTitle>{log.title}</LogTitle>
-                          <LogWage>{formatKRW(log.finalWage)}</LogWage>
+                          <LogTitle title={log.title}>{log.title}</LogTitle>
+                          <LogWage title={formatKRW(log.finalWage)}>
+                            <LogWageAmount>
+                              {formatWageAmount(log.finalWage)}
+                            </LogWageAmount>
+                            <LogWageUnit>원</LogWageUnit>
+                          </LogWage>
                         </LogBadge>
                       )}
                     </DayCellBody>
