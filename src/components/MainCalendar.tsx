@@ -22,17 +22,13 @@ function formatKRW(n: number): string {
 }
 
 const AppFrame = styled.div`
-  max-width: 480px;
   width: 100%;
-  margin: 0 auto;
-  min-height: 100dvh;
-  min-height: 100svh;
-  padding: 1rem 0.875rem calc(1rem + env(safe-area-inset-bottom, 0));
-  padding-top: calc(1rem + env(safe-area-inset-top, 0));
-  box-sizing: border-box;
+  min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  box-sizing: border-box;
 `
 
 const Card = styled.div`
@@ -223,8 +219,34 @@ const CalendarSection = styled.div`
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  padding: 0 0.65rem 1rem;
+  padding: 0.65rem 0.65rem 1rem;
   box-sizing: border-box;
+`
+
+const CalendarToolbar = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.45rem;
+`
+
+const AmountToggleBtn = styled.button`
+  padding: 0.38rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  border: 1px solid var(--cal-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--cal-muted, #f9fafb);
+  color: var(--cal-text-dim, #6b7280);
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  &:active {
+    transform: scale(0.97);
+    background: var(--cal-muted-press, #e5e7eb);
+  }
 `
 
 const WeekHeader = styled.div`
@@ -269,7 +291,7 @@ const DayCell = styled.button<{
   max-width: 100%;
   width: 100%;
   min-height: 4.5rem;
-  padding: 0.28rem 0.15rem 0.32rem;
+  padding: 0.3rem 0.25rem 0.34rem 0.375rem;
   border: none;
   border-radius: 10px;
   overflow: hidden;
@@ -383,6 +405,7 @@ export default function MainCalendar() {
 
   const [cursor, setCursor] = useState(() => new Date())
   const [reportOpen, setReportOpen] = useState(false)
+  const [showAmounts, setShowAmounts] = useState(true)
 
   const year = cursor.getFullYear()
   const monthIndex = cursor.getMonth()
@@ -526,6 +549,15 @@ export default function MainCalendar() {
 
       <Card>
         <CalendarSection>
+          <CalendarToolbar>
+            <AmountToggleBtn
+              type="button"
+              aria-pressed={showAmounts}
+              onClick={() => setShowAmounts((v) => !v)}
+            >
+              {showAmounts ? '금액 숨기기' : '금액 보기'}
+            </AmountToggleBtn>
+          </CalendarToolbar>
           <WeekHeader>
             {WEEKDAYS.map((w, idx) => (
               <WeekHeadCell
@@ -566,7 +598,7 @@ export default function MainCalendar() {
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? `, ${log.title}` : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${showAmounts && log ? `, ${log.title}, ${formatKRW(log.finalWage)}` : log && !showAmounts ? ', 근무 기록 있음' : ''}`
                       : '빈 칸'
                   }
                 >
@@ -578,7 +610,7 @@ export default function MainCalendar() {
                           {holidayName}
                         </HolidayLabel>
                       )}
-                      {log && (
+                      {showAmounts && log && (
                         <LogBadge>
                           <LogTitle>{log.title}</LogTitle>
                           <LogWage>{formatKRW(log.finalWage)}</LogWage>

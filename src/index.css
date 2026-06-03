@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 /* 모바일 웹앱 베이스: 더블탭/포커스 시 의도치 않은 확대 완화는 viewport + 입력 폰트 크기(16px+)와 함께 사용하세요. */
 
 *,
@@ -9,13 +11,16 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
   min-height: 100svh;
+  overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  background-color: #eef2f6;
 }
 
 /* UI 전반: 텍스트 드래그 선택 억제 (입력·복사 가능 영역은 예외) */
@@ -46,4 +51,6 @@ a {
 #root {
   min-height: 100dvh;
   min-height: 100svh;
+  width: 100%;
+  overflow-x: hidden;
 }
