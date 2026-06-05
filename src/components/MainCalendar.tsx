@@ -23,6 +23,10 @@ function formatKRW(n: number): string {
   return `${n.toLocaleString('ko-KR')}원`
 }
 
+function formatKRWAmount(n: number): string {
+  return n.toLocaleString('ko-KR')
+}
+
 
 const AppFrame = styled.div`
   width: 100%;
@@ -367,14 +371,14 @@ const HolidayLabel = styled.span`
 const LogBadge = styled.div`
   min-width: 0;
   width: 100%;
-  margin-top: auto;
-  padding: 0.14rem 0.2rem;
-  border-radius: 6px;
+  margin-top: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 5px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.22);
   display: flex;
   flex-direction: column;
-  gap: 0.06rem;
+  gap: 0;
   overflow: visible;
   box-sizing: border-box;
 `
@@ -391,22 +395,33 @@ const LogTitle = styled.span`
   width: 100%;
   font-size: 0.5625rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.05;
   color: var(--cal-text, #111827);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `
 
+const LogWageWrap = styled.div`
+  width: 100%;
+  text-align: center;
+`
+
 const LogWage = styled.span`
-  display: block;
-  width: max-content;
-  max-width: none;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  max-width: 100%;
   white-space: nowrap;
   font-weight: 900;
-  line-height: 1.15;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--cal-accent-strong, #4338ca);
+`
+
+const LogWageUnit = styled.span`
+  font-weight: 700;
+  margin-left: 0.5px;
 `
 
 export default function MainCalendar() {
@@ -629,14 +644,21 @@ export default function MainCalendar() {
                       {showAmounts && log && (
                         <LogBadge>
                           <LogTitleWrap>
-                            <LogTitle title={log.title}>{log.title}</LogTitle>
+                            <LogTitle className="leading-tight" title={log.title}>
+                              {log.title}
+                            </LogTitle>
                           </LogTitleWrap>
-                          <LogWage
-                            className="text-[10px] tracking-tighter whitespace-nowrap"
-                            title={formatKRW(log.finalWage)}
-                          >
-                            {formatKRW(log.finalWage)}
-                          </LogWage>
+                          <LogWageWrap>
+                            <LogWage
+                              className="text-[9px] tracking-tighter whitespace-nowrap"
+                              title={formatKRW(log.finalWage)}
+                            >
+                              {formatKRWAmount(log.finalWage)}
+                              <LogWageUnit className="text-[8px] font-bold text-gray-500">
+                                원
+                              </LogWageUnit>
+                            </LogWage>
+                          </LogWageWrap>
                         </LogBadge>
                       )}
                     </DayCellBody>

@@ -27,6 +27,9 @@ const BANNER_SLIDES = [
   },
 ] as const
 
+const SLIDE_ITEM_BASE =
+  'absolute top-0 left-0 flex h-full w-full shrink-0 items-center justify-center overflow-hidden px-1 text-xs font-semibold leading-snug text-gray-700 whitespace-nowrap'
+
 const SLIDE_MOTION =
   'transition-all duration-700 ease-in-out will-change-transform'
 
@@ -158,10 +161,10 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
     >
       <div className="flex min-w-0 items-center gap-2 overflow-hidden px-3 py-2.5">
         <div
-          className="relative h-9 min-w-0 flex-1 overflow-hidden"
+          className="relative h-9 min-w-0 flex-1 overflow-hidden isolate"
           aria-live="polite"
         >
-          <div className="relative flex h-9 w-full items-center justify-center overflow-hidden">
+          <div className="relative h-9 w-full overflow-hidden">
             {BANNER_SLIDES.map((slide, index) => {
               const visual = resolveVisual(
                 index,
@@ -171,7 +174,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
                 exitingIndex,
               )
               const isActiveSlide = index === activeIndex
-              const className = `absolute max-w-none whitespace-nowrap px-1 text-xs font-semibold leading-snug text-gray-700 ${visualClass(visual)} ${
+              const className = `${SLIDE_ITEM_BASE} ${visualClass(visual)} ${
                 isActiveSlide && isNoticeInteractive
                   ? 'cursor-pointer rounded-md active:bg-gray-100'
                   : 'pointer-events-none'

@@ -1,24 +1,15 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-/**
- * 사용자가 직접 만든 "실제 입금된 금액" 템플릿.
- * - title: 예) "쿠팡 주간 기본", "쿠팡 공휴일", "컬리 특근"
- * - amount: 해당 일에 실제 입금되는 금액(세후 등 모든 가산이 이미 포함된 최종액)
- */
-export interface Template {
-  id: string
-  title: string
-  amount: number
-}
-
 /** 일별 근무 기록 (단일 날짜 단위) */
 export interface WorkLogEntry {
+  /** 레거시 호환용 — 직접 입력 방식에서는 'manual' 고정 */
   templateId: string
+  /** 회사명 또는 근무지 */
   title: string
-  /** 저장 시점 템플릿 입금액 스냅샷 */
+  /** 급여 (기본급) */
   amount: number
-  /** 추가 인센티브·프로모션 수당 */
+  /** 인센티브 · 프로모션 수당 */
   incentive: number
   /** amount + incentive */
   finalWage: number
@@ -28,14 +19,7 @@ export type WorkLogsMap = Record<string, WorkLogEntry>
 export type MonthlyGoalsMap = Record<string, number>
 
 const STORAGE_KEY = 'calendar-wage-storage'
-const PERSIST_VERSION = 10
-
-function createTemplateId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
+const PERSIST_VERSION = 11
 
 function toNonNegativeNumber(raw: unknown): number {
   const n = Number(raw)
@@ -43,19 +27,15 @@ function toNonNegativeNumber(raw: unknown): number {
   return n
 }
 
-/**
- * 최종 일급 산식: 선택된 템플릿의 amount + additionalIncentive
- * 음수는 0으로 보정.
- */
+/** 급여 + 인센티브 합산 (음수는 0으로 보정) */
 export function computeFinalDailyWage(
-  templateAmount: number,
-  additionalIncentive: number,
+  baseAmount: number,
+  incentive: number,
 ): number {
-  return toNonNegativeNumber(templateAmount) + toNonNegativeNumber(additionalIncentive)
+  return toNonNegativeNumber(baseAmount) + toNonNegativeNumber(incentive)
 }
 
 export interface WageStorePersisted {
-  templates: Template[]
   workLogs: WorkLogsMap
   monthlyGoals: MonthlyGoalsMap
 }
@@ -63,28 +43,13 @@ export interface WageStorePersisted {
 export interface WageStoreState extends WageStorePersisted {
   /** 캘린더에서 현재 선택된 날짜 (YYYY-MM-DD) */
   selectedDate: string | null
-  selectedTemplateId: string | null
-  additionalIncentive: number
 }
 
 export interface WageStoreActions {
-  /** 템플릿 생성 — title·amount 필수. 둘 다 유효해야 추가되고, 추가된 객체를 반환. */
-  addTemplate: (title: string, amount: number) => Template | null
-  updateTemplate: (
-    id: string,
-    updated: Partial<Pick<Template, 'title' | 'amount'>>,
-  ) => void
-  deleteTemplate: (id: string) => void
-
   setSelectedDate: (date: string | null) => void
-  setSelectedTemplateId: (id: string | null) => void
-  setAdditionalIncentive: (amount: number) => void
-  /** 모달 닫을 때 초안(선택 템플릿·인센티브) 초기화 */
-  resetEntryDraft: () => void
 
   addWorkLog: (
     date: string,
-    templateId: string,
     title: string,
     amount: number,
     incentive: number,
@@ -106,19 +71,9 @@ function normalizeDateKey(raw: unknown): string | null {
 }
 
 const initialState: WageStoreState = {
-  templates: [],
   workLogs: {},
   monthlyGoals: {},
   selectedDate: null,
-  selectedTemplateId: null,
-  additionalIncentive: 0,
-}
-
-type LegacyTemplate = {
-  id?: unknown
-  title?: unknown
-  amount?: unknown
-  defaultWage?: unknown
 }
 
 type LegacyWorkLog = {
@@ -131,52 +86,47 @@ type LegacyWorkLog = {
 }
 
 type LegacyPersisted = {
-  templates?: LegacyTemplate[]
+  templates?: unknown[]
   workLogs?: Record<string, LegacyWorkLog>
   monthlyGoals?: MonthlyGoalsMap
   monthlyGoal?: number
 }
 
-/** v9 이하 → v10: 시급/할증/주휴 계산 필드 제거, defaultWage→amount, baseWage→amount */
-function migrateToV10(input: unknown): WageStorePersisted {
+function migrateWorkLogs(raw: Record<string, LegacyWorkLog> | undefined): WorkLogsMap {
+  const workLogs: WorkLogsMap = {}
+  for (const [key, entry] of Object.entries(raw ?? {})) {
+    if (!entry || typeof entry !== 'object') continue
+    const amount = toNonNegativeNumber(entry.amount ?? entry.baseWage)
+    const incentive = toNonNegativeNumber(entry.incentive)
+    workLogs[key] = {
+      templateId: String(entry.templateId ?? 'manual'),
+      title: String(entry.title ?? '').trim(),
+      amount,
+      incentive,
+      finalWage: amount + incentive,
+    }
+  }
+  return workLogs
+}
+
+/** v10 이하 → v11: 템플릿 제거, workLogs·monthlyGoals 유지 */
+function migrateToV11(input: unknown): WageStorePersisted {
   const empty: WageStorePersisted = {
-    templates: [],
     workLogs: {},
     monthlyGoals: {},
   }
   if (!input || typeof input !== 'object') return empty
   const p = input as LegacyPersisted
 
-  const templates: Template[] = []
-  for (const raw of Array.isArray(p.templates) ? p.templates : []) {
-    if (!raw || typeof raw !== 'object') continue
-    const id = typeof raw.id === 'string' && raw.id ? raw.id : createTemplateId()
-    const title = String(raw.title ?? '').trim()
-    const amount = toNonNegativeNumber(raw.amount ?? raw.defaultWage)
-    if (!title) continue
-    templates.push({ id, title, amount })
-  }
-
-  const workLogs: WorkLogsMap = {}
-  for (const [key, raw] of Object.entries(p.workLogs ?? {})) {
-    if (!raw || typeof raw !== 'object') continue
-    const amount = toNonNegativeNumber(raw.amount ?? raw.baseWage)
-    const incentive = toNonNegativeNumber(raw.incentive)
-    workLogs[key] = {
-      templateId: String(raw.templateId ?? 'manual'),
-      title: String(raw.title ?? '').trim(),
-      amount,
-      incentive,
-      finalWage: amount + incentive,
-    }
-  }
-
   const monthlyGoals: MonthlyGoalsMap =
     p.monthlyGoals && typeof p.monthlyGoals === 'object'
       ? { ...p.monthlyGoals }
       : {}
 
-  return { templates, workLogs, monthlyGoals }
+  return {
+    workLogs: migrateWorkLogs(p.workLogs),
+    monthlyGoals,
+  }
 }
 
 export const useWageStore = create<WageStore>()(
@@ -184,57 +134,10 @@ export const useWageStore = create<WageStore>()(
     (set) => ({
       ...initialState,
 
-      addTemplate: (title, amount) => {
-        const trimmed = String(title ?? '').trim()
-        const amt = toNonNegativeNumber(amount)
-        if (!trimmed || amt <= 0) return null
-        const tpl: Template = {
-          id: createTemplateId(),
-          title: trimmed,
-          amount: amt,
-        }
-        set((s) => ({ templates: [...s.templates, tpl] }))
-        return tpl
-      },
-
-      updateTemplate: (id, updated) =>
-        set((s) => {
-          const idx = s.templates.findIndex((t) => t.id === id)
-          if (idx < 0) return s
-          const cur = s.templates[idx]
-          const nextTitle =
-            updated.title !== undefined
-              ? String(updated.title).trim() || cur.title
-              : cur.title
-          const nextAmount =
-            updated.amount !== undefined
-              ? toNonNegativeNumber(updated.amount)
-              : cur.amount
-          const next = [...s.templates]
-          next[idx] = { ...cur, title: nextTitle, amount: nextAmount }
-          return { templates: next }
-        }),
-
-      deleteTemplate: (id) =>
-        set((s) => {
-          const templates = s.templates.filter((t) => t.id !== id)
-          const selectedTemplateId =
-            s.selectedTemplateId === id ? null : s.selectedTemplateId
-          return { templates, selectedTemplateId }
-        }),
-
       setSelectedDate: (date) =>
         set({ selectedDate: date != null ? normalizeDateKey(date) : null }),
 
-      setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
-
-      setAdditionalIncentive: (amount) =>
-        set({ additionalIncentive: toNonNegativeNumber(amount) }),
-
-      resetEntryDraft: () =>
-        set({ selectedTemplateId: null, additionalIncentive: 0 }),
-
-      addWorkLog: (date, templateId, title, amount, incentive) => {
+      addWorkLog: (date, title, amount, incentive) => {
         const amt = toNonNegativeNumber(amount)
         const inc = toNonNegativeNumber(incentive)
         const finalWage = amt + inc
@@ -242,7 +145,7 @@ export const useWageStore = create<WageStore>()(
           workLogs: {
             ...s.workLogs,
             [date]: {
-              templateId,
+              templateId: 'manual',
               title: String(title ?? '').trim(),
               amount: amt,
               incentive: inc,
@@ -275,13 +178,12 @@ export const useWageStore = create<WageStore>()(
       version: PERSIST_VERSION,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        templates: state.templates,
         workLogs: state.workLogs,
         monthlyGoals: state.monthlyGoals,
       }),
       migrate: (persisted, fromVersion) => {
         if (fromVersion < PERSIST_VERSION) {
-          return migrateToV10(persisted) as WageStoreState
+          return migrateToV11(persisted) as WageStoreState
         }
         return persisted as WageStoreState
       },

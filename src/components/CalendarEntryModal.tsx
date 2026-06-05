@@ -1,18 +1,9 @@
 import styled from '@emotion/styled'
-import {
-  type FormEvent,
-  type MouseEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   computeFinalDailyWage,
   useWageStore,
 } from '../store/useWageStore'
-import type { Template } from '../store/useWageStore'
 import { getHolidayName } from '../utils/holidays'
 
 function pad2(n: number): string {
@@ -30,7 +21,7 @@ function formatKRW(n: number): string {
 
 function parseMoneyInput(raw: string): number {
   const v = Number(raw.replace(/,/g, '').trim())
-  return Number.isFinite(v) ? v : 0
+  return Number.isFinite(v) && v > 0 ? v : 0
 }
 
 function todayDateKey(): string {
@@ -117,112 +108,6 @@ const HeaderRow = styled.div`
   gap: 0.75rem;
 `
 
-const TemplatePanel = styled.div`
-  padding: 0.85rem 1rem 1rem;
-  border-radius: 16px;
-  background: var(--cal-muted, #f9fafb);
-  border: 1px solid var(--cal-border, #e5e7eb);
-`
-
-const SectionTitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.5rem;
-  position: relative;
-`
-
-const SectionTitleText = styled.span`
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--cal-text-dim, #6b7280);
-`
-
-const HelpAnchor = styled.div`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-`
-
-const HelpButton = styled.button<{ $active: boolean }>`
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 999px;
-  border: none;
-  background: ${({ $active }) =>
-    $active ? 'var(--cal-accent-strong, #6366f1)' : 'var(--cal-muted-press, #e5e7eb)'};
-  color: ${({ $active }) => ($active ? '#fff' : 'var(--cal-text-dim, #6b7280)')};
-  font-size: 0.72rem;
-  font-weight: 900;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: manipulation;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
-
-  &:active {
-    transform: scale(0.92);
-  }
-`
-
-const Tooltip = styled.div<{ $open: boolean }>`
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 240px;
-  max-width: 280px;
-  padding: 0.75rem 0.85rem;
-  background: var(--cal-text, #111827);
-  color: #fff;
-  border-radius: 12px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.3);
-  pointer-events: none;
-  opacity: ${({ $open }) => ($open ? 1 : 0)};
-  visibility: ${({ $open }) => ($open ? 'visible' : 'hidden')};
-  transition: opacity 0.18s ease, visibility 0.18s ease;
-  z-index: 30;
-  text-transform: none;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: -5px;
-    left: 50%;
-    transform: translateX(-50%) rotate(45deg);
-    width: 10px;
-    height: 10px;
-    background: var(--cal-text, #111827);
-    border-radius: 2px;
-  }
-`
-
-const TooltipList = styled.ol`
-  margin: 0;
-  padding-left: 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.32rem;
-`
-
-const TooltipNotice = styled.p`
-  margin: 0.55rem 0 0;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--cal-text-dim, #6b7280);
-  text-align: center;
-  line-height: 1.4;
-`
-
 const Scroll = styled.div`
   flex: 1;
   overflow-y: auto;
@@ -279,176 +164,20 @@ const HeaderText = styled.div`
   min-width: 0;
 `
 
-const TemplateList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-`
-
-const TemplateCard = styled.div<{ $active: boolean }>`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 12px 16px;
-  border-radius: 10px;
-  box-sizing: border-box;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(145deg, #4f46e5 0%, #6366f1 100%)'
-      : 'var(--cal-surface, #fff)'};
-  color: ${({ $active }) => ($active ? '#fff' : 'inherit')};
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? 'transparent' : 'var(--cal-border, #e5e7eb)'};
-  box-shadow: ${({ $active }) =>
-    $active
-      ? '0 6px 20px rgba(79, 70, 229, 0.32)'
-      : '0 1px 4px rgba(15, 23, 42, 0.06)'};
-`
-
-const TemplateCardSelect = styled.button`
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  touch-action: manipulation;
-  display: flex;
-  align-items: center;
-  color: inherit;
-
-  &:active {
-    opacity: 0.92;
-  }
-`
-
-const TemplateInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const TemplateTitle = styled.span<{ $active: boolean }>`
-  font-size: 0.92rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  color: ${({ $active }) =>
-    $active ? '#fff' : 'var(--cal-text, #111827)'};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const TemplateMeta = styled.span<{ $active: boolean }>`
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  color: ${({ $active }) =>
-    $active
-      ? 'rgba(255, 255, 255, 0.88)'
-      : 'var(--cal-accent-strong, #4338ca)'};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const TemplateCardActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: 0.25rem;
-`
-
-const TemplateIconBtn = styled.button<{ $onDark: boolean }>`
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  border: none;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  line-height: 1;
-  cursor: pointer;
-  touch-action: manipulation;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: ${({ $onDark }) =>
-    $onDark ? 'rgba(255, 255, 255, 0.22)' : 'var(--cal-muted, #f3f4f6)'};
-  color: ${({ $onDark }) => ($onDark ? '#fff' : 'var(--cal-text, #111827)')};
-
-  &:active {
-    transform: scale(0.94);
-  }
-`
-
-const PickPromptInner = styled.div`
-  padding: 1rem 0.85rem;
-  border-radius: 12px;
-  background: var(--cal-surface, #fff);
-  border: 1px dashed var(--cal-border, #d1d5db);
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: var(--cal-text-dim, #6b7280);
-  text-align: center;
-  line-height: 1.45;
-`
-
-const IncentiveCard = styled.div`
+const FormPanel = styled.div`
   padding: 1rem 1.05rem;
   border-radius: 16px;
   background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
   border: 1px solid var(--cal-border, #e5e7eb);
-`
-
-const IncentiveLabel = styled.p`
-  margin: 0 0 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 900;
-  color: var(--cal-text, #111827);
-  letter-spacing: -0.01em;
-`
-
-const IncentiveHint = styled.p`
-  margin: 0.55rem 0 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--cal-text-dim, #6b7280);
-  line-height: 1.5;
-`
-
-const SelectedSummary = styled.div`
-  padding: 0.9rem 1rem;
-  border-radius: 14px;
-  background: var(--cal-accent-soft, #eef2ff);
-  border: 1px solid rgba(99, 102, 241, 0.2);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.85rem;
 `
 
-const SelectedKey = styled.span`
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: var(--cal-accent-strong, #4338ca);
-`
-
-const SelectedVal = styled.span`
-  font-size: 0.92rem;
-  font-weight: 900;
-  color: var(--cal-text, #111827);
-  text-align: right;
-  word-break: keep-all;
+const FieldGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 `
 
 const FieldLabel = styled.span`
@@ -474,100 +203,9 @@ const Input = styled.input`
     outline-offset: 0;
   }
 
-  &:disabled {
-    background: var(--cal-muted, #f3f4f6);
+  &::placeholder {
     color: var(--cal-text-dim, #9ca3af);
-    cursor: not-allowed;
-  }
-`
-
-const AddTemplateBlock = styled.div<{ $focused?: boolean }>`
-  flex-shrink: 0;
-  padding: ${({ $focused }) =>
-    $focused ? '0.75rem 1.1rem 1.1rem' : '0.5rem 1.1rem 0.25rem'};
-  padding-bottom: calc(
-    ${({ $focused }) => ($focused ? '1.1rem' : '0.25rem')} +
-      env(safe-area-inset-bottom, 0)
-  );
-  border-top: ${({ $focused }) =>
-    $focused ? 'none' : '1px solid var(--cal-border, #f3f4f6)'};
-  overflow: visible;
-  position: relative;
-  z-index: 2;
-  ${({ $focused }) =>
-    $focused &&
-    `
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  `}
-`
-
-const ToggleBtn = styled.button<{ $open: boolean }>`
-  width: 100%;
-  padding: 0.95rem 1rem;
-  border-radius: 14px;
-  border: 2px dashed
-    ${({ $open }) =>
-      $open ? 'var(--cal-accent-strong, #6366f1)' : 'var(--cal-border, #d1d5db)'};
-  background: ${({ $open }) =>
-    $open ? 'var(--cal-accent-soft, #eef2ff)' : 'var(--cal-muted, #fafafa)'};
-  font-size: 0.9rem;
-  font-weight: 900;
-  color: ${({ $open }) =>
-    $open ? 'var(--cal-accent-strong, #4338ca)' : 'var(--cal-text-dim, #6b7280)'};
-  cursor: pointer;
-  touch-action: manipulation;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: 56px;
-
-  &:active {
-    transform: scale(0.995);
-  }
-`
-
-const AccordionPanel = styled.div<{ $open: boolean; $focused?: boolean }>`
-  display: ${({ $open }) => ($open ? 'flex' : 'none')};
-  flex-direction: column;
-  flex: ${({ $open, $focused }) => ($open && $focused ? 1 : 'unset')};
-  overflow: visible;
-`
-
-const AddForm = styled.form<{ $focused?: boolean }>`
-  margin-top: 0.6rem;
-  padding: 1rem;
-  border-radius: 16px;
-  background: var(--cal-muted, #f9fafb);
-  border: 1px solid var(--cal-border, #e5e7eb);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  overflow: visible;
-  ${({ $focused }) => $focused && 'flex: 1;'}
-`
-
-const SaveTplBtn = styled.button`
-  padding: 0.85rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 900;
-  border: none;
-  border-radius: 14px;
-  background: var(--cal-accent-strong, #6366f1);
-  color: #fff;
-  cursor: pointer;
-  touch-action: manipulation;
-  min-height: 52px;
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.99);
+    font-weight: 600;
   }
 `
 
@@ -666,18 +304,10 @@ export default function CalendarEntryModal({
   open,
   onClose,
 }: CalendarEntryModalProps) {
-  const templates = useWageStore((s) => s.templates)
   const workLogs = useWageStore((s) => s.workLogs)
   const selectedDate = useWageStore((s) => s.selectedDate)
-  const selectedTemplateId = useWageStore((s) => s.selectedTemplateId)
-  const setSelectedTemplateId = useWageStore((s) => s.setSelectedTemplateId)
-  const setAdditionalIncentive = useWageStore((s) => s.setAdditionalIncentive)
-  const resetEntryDraft = useWageStore((s) => s.resetEntryDraft)
   const addWorkLog = useWageStore((s) => s.addWorkLog)
   const deleteWageRecord = useWageStore((s) => s.deleteWageRecord)
-  const addTemplate = useWageStore((s) => s.addTemplate)
-  const updateTemplate = useWageStore((s) => s.updateTemplate)
-  const deleteTemplate = useWageStore((s) => s.deleteTemplate)
 
   const existingRecord = useMemo(
     () => (selectedDate ? workLogs[selectedDate] : undefined),
@@ -690,41 +320,28 @@ export default function CalendarEntryModal({
   const hasExistingRecord = existingRecord != null
 
   const [sheetVisible, setSheetVisible] = useState(false)
+  const [companyName, setCompanyName] = useState('')
+  const [salaryRaw, setSalaryRaw] = useState('')
   const [incentiveRaw, setIncentiveRaw] = useState('')
-  const [addOpen, setAddOpen] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newAmount, setNewAmount] = useState('')
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(
-    null,
-  )
-  const [helpOpen, setHelpOpen] = useState(false)
-  const helpRef = useRef<HTMLDivElement | null>(null)
 
-  /** 선택된 날짜·기록 여부에 따라 입력 초안 동기화 */
+  const resetForm = useCallback(() => {
+    setCompanyName('')
+    setSalaryRaw('')
+    setIncentiveRaw('')
+  }, [])
+
+  /** 선택된 날짜·기록 여부에 따라 입력 폼 동기화 */
   useEffect(() => {
     if (!open || !selectedDate) return
     const record = workLogs[selectedDate]
     if (record) {
-      const tid = record.templateId
-      const validTpl =
-        tid && templates.some((t) => t.id === tid) ? tid : null
-      setSelectedTemplateId(validTpl)
-      const inc = record.incentive || 0
-      setAdditionalIncentive(inc)
-      setIncentiveRaw(inc > 0 ? String(inc) : '')
+      setCompanyName(record.title)
+      setSalaryRaw(record.amount > 0 ? String(record.amount) : '')
+      setIncentiveRaw(record.incentive > 0 ? String(record.incentive) : '')
     } else {
-      resetEntryDraft()
-      setIncentiveRaw('')
+      resetForm()
     }
-  }, [
-    open,
-    selectedDate,
-    workLogs,
-    templates,
-    setSelectedTemplateId,
-    setAdditionalIncentive,
-    resetEntryDraft,
-  ])
+  }, [open, selectedDate, workLogs, resetForm])
 
   useEffect(() => {
     if (!open) {
@@ -740,162 +357,57 @@ export default function CalendarEntryModal({
     }
   }, [open])
 
-  useEffect(() => {
-    if (!helpOpen) return
-    const onDocClick = (e: Event) => {
-      if (!helpRef.current) return
-      if (!helpRef.current.contains(e.target as Node)) setHelpOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('touchstart', onDocClick, { passive: true })
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('touchstart', onDocClick)
-    }
-  }, [helpOpen])
-
-  const resetTemplateForm = useCallback(() => {
-    setEditingTemplateId(null)
-    setNewTitle('')
-    setNewAmount('')
-  }, [])
-
-  const fillTemplateForm = useCallback((t: Template) => {
-    setNewTitle(t.title)
-    setNewAmount(String(t.amount))
-  }, [])
-
-  const incNum = useMemo(() => parseMoneyInput(incentiveRaw), [incentiveRaw])
-  const newAmountNum = useMemo(() => parseMoneyInput(newAmount), [newAmount])
-
-  const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === selectedTemplateId) ?? null,
-    [templates, selectedTemplateId],
+  const salaryNum = useMemo(() => parseMoneyInput(salaryRaw), [salaryRaw])
+  const incentiveNum = useMemo(
+    () => parseMoneyInput(incentiveRaw),
+    [incentiveRaw],
   )
 
   const finalPreview = useMemo(
-    () => computeFinalDailyWage(selectedTemplate?.amount ?? 0, incNum),
-    [selectedTemplate, incNum],
+    () => computeFinalDailyWage(salaryNum, incentiveNum),
+    [salaryNum, incentiveNum],
   )
 
   const isToday = selectedDate != null && selectedDate === todayDateKey()
   const canSubmit =
     selectedDate != null &&
-    selectedTemplate != null &&
-    Number.isFinite(finalPreview)
+    companyName.trim().length > 0 &&
+    salaryNum > 0
 
   const closeAnimated = useCallback(() => {
     setSheetVisible(false)
     window.setTimeout(() => {
       onClose()
-      resetEntryDraft()
-      resetTemplateForm()
-      setAddOpen(false)
-      setIncentiveRaw('')
-      setHelpOpen(false)
+      resetForm()
     }, 320)
-  }, [onClose, resetEntryDraft, resetTemplateForm])
+  }, [onClose, resetForm])
 
   const closeImmediate = useCallback(() => {
-    resetEntryDraft()
-    resetTemplateForm()
-    setAddOpen(false)
-    setIncentiveRaw('')
-    setHelpOpen(false)
+    resetForm()
     setSheetVisible(false)
     onClose()
-  }, [onClose, resetEntryDraft, resetTemplateForm])
+  }, [onClose, resetForm])
 
   const handleBackdrop = useCallback(() => {
     closeImmediate()
   }, [closeImmediate])
 
-  const handleSelectTemplate = useCallback(
-    (id: string) => {
-      setSelectedTemplateId(id)
-    },
-    [setSelectedTemplateId],
-  )
-
-  const handleDeleteTemplate = useCallback(
-    (e: MouseEvent, id: string) => {
-      e.stopPropagation()
-      deleteTemplate(id)
-      if (editingTemplateId === id) {
-        resetTemplateForm()
-        setAddOpen(false)
-      }
-    },
-    [deleteTemplate, editingTemplateId, resetTemplateForm],
-  )
-
-  const handleStartEditTemplate = useCallback(
-    (e: MouseEvent, t: Template) => {
-      e.stopPropagation()
-      setEditingTemplateId(t.id)
-      setAddOpen(true)
-      fillTemplateForm(t)
-    },
-    [fillTemplateForm],
-  )
-
-  const handleIncentiveChange = useCallback(
-    (raw: string) => {
-      setIncentiveRaw(raw)
-      setAdditionalIncentive(parseMoneyInput(raw))
-    },
-    [setAdditionalIncentive],
-  )
-
-  const handleTemplateFormSubmit = useCallback(
-    (ev: FormEvent) => {
-      ev.preventDefault()
-      const title = newTitle.trim()
-      const amount = parseMoneyInput(newAmount)
-      if (!title || amount <= 0) return
-
-      if (editingTemplateId) {
-        updateTemplate(editingTemplateId, { title, amount })
-        resetTemplateForm()
-        setAddOpen(false)
-        return
-      }
-
-      const added = addTemplate(title, amount)
-      resetTemplateForm()
-      setAddOpen(false)
-      if (added) setSelectedTemplateId(added.id)
-    },
-    [
-      addTemplate,
-      updateTemplate,
-      editingTemplateId,
-      newTitle,
-      newAmount,
-      resetTemplateForm,
-      setSelectedTemplateId,
-    ],
-  )
-
-  const isEditingTemplate = editingTemplateId != null
-  const isAddingTemplate = addOpen
-
   const handleSubmit = useCallback(() => {
-    if (!selectedDate || !canSubmit || !selectedTemplate) return
+    if (!selectedDate || !canSubmit) return
     addWorkLog(
       selectedDate,
-      selectedTemplate.id,
-      selectedTemplate.title,
-      selectedTemplate.amount,
-      incNum,
+      companyName.trim(),
+      salaryNum,
+      incentiveNum,
     )
     closeAnimated()
   }, [
     selectedDate,
     canSubmit,
-    selectedTemplate,
     addWorkLog,
-    incNum,
+    companyName,
+    salaryNum,
+    incentiveNum,
     closeAnimated,
   ])
 
@@ -907,18 +419,8 @@ export default function CalendarEntryModal({
       return
     }
     deleteWageRecord(selectedDate)
-    resetEntryDraft()
-    setIncentiveRaw('')
-    setAddOpen(false)
-    resetTemplateForm()
-    setHelpOpen(false)
-  }, [
-    selectedDate,
-    hasExistingRecord,
-    deleteWageRecord,
-    resetEntryDraft,
-    resetTemplateForm,
-  ])
+    resetForm()
+  }, [selectedDate, hasExistingRecord, deleteWageRecord, resetForm])
 
   if (!open && !sheetVisible) return null
 
@@ -954,13 +456,7 @@ export default function CalendarEntryModal({
                       </span>
                     )}
                   </div>
-                  <Hint>
-                    {isAddingTemplate
-                      ? '제목과 실제 입금액을 입력한 뒤 템플릿을 저장하세요'
-                      : hasExistingRecord
-                        ? '템플릿 선택 → 인센티브 수정 → 저장'
-                        : '템플릿 선택 → 인센티브 입력 → 저장'}
-                  </Hint>
+                  <Hint>근무 정보 및 급여 입력</Hint>
                 </HeaderText>
                 <CloseBtn
                   type="button"
@@ -973,207 +469,69 @@ export default function CalendarEntryModal({
             </HeaderBlock>
           )}
 
-          {!isAddingTemplate && (
-            <Scroll>
-              <TemplatePanel>
-                <SectionTitleRow>
-                  <SectionTitleText>입력 가능 템플릿</SectionTitleText>
-                  <HelpAnchor ref={helpRef}>
-                    <HelpButton
-                      type="button"
-                      $active={helpOpen}
-                      aria-label="템플릿 도움말"
-                      aria-expanded={helpOpen}
-                      onClick={() => setHelpOpen((v) => !v)}
-                      onMouseEnter={() => setHelpOpen(true)}
-                      onMouseLeave={() => setHelpOpen(false)}
-                    >
-                      ?
-                    </HelpButton>
-                    <Tooltip $open={helpOpen} role="tooltip">
-                      <TooltipList>
-                        <li>기본 일급 혹은 공휴일, 특근 수당을 입력한다.</li>
-                        <li>
-                          템플릿을 저장하고 해당 템플릿을 선택 후 하단에
-                          인센티브 금액을 입력한다.
-                        </li>
-                        <li>저장하기를 누르면 해당 일에 기록된다.</li>
-                      </TooltipList>
-                    </Tooltip>
-                  </HelpAnchor>
-                </SectionTitleRow>
-                {templates.length > 0 ? (
-                  <>
-                    <TemplateList>
-                      {templates.map((t) => {
-                        const active = selectedTemplateId === t.id
-                        return (
-                          <TemplateCard key={t.id} $active={active}>
-                            <TemplateCardSelect
-                              type="button"
-                              onClick={() => handleSelectTemplate(t.id)}
-                            >
-                              <TemplateInfo>
-                                <TemplateTitle $active={active}>
-                                  {t.title}
-                                </TemplateTitle>
-                                <TemplateMeta $active={active}>
-                                  {formatKRW(t.amount)}
-                                </TemplateMeta>
-                              </TemplateInfo>
-                            </TemplateCardSelect>
-                            <TemplateCardActions>
-                              <TemplateIconBtn
-                                type="button"
-                                $onDark={active}
-                                aria-label={`${t.title} 템플릿 수정`}
-                                onClick={(e) =>
-                                  handleStartEditTemplate(e, t)
-                                }
-                              >
-                                ✎
-                              </TemplateIconBtn>
-                              <TemplateIconBtn
-                                type="button"
-                                $onDark={active}
-                                aria-label={`${t.title} 템플릿 삭제`}
-                                onClick={(e) => handleDeleteTemplate(e, t.id)}
-                              >
-                                ×
-                              </TemplateIconBtn>
-                            </TemplateCardActions>
-                          </TemplateCard>
-                        )
-                      })}
-                    </TemplateList>
-                    {!selectedTemplate && (
-                      <TooltipNotice>
-                        위 템플릿을 눌러 실제 입금액을 적용하세요.
-                      </TooltipNotice>
-                    )}
-                  </>
-                ) : (
-                  <PickPromptInner>
-                    등록된 템플릿이 없습니다.
-                    <br />
-                    아래 「+ 새 템플릿 등록」을 눌러 먼저 추가해 주세요.
-                  </PickPromptInner>
-                )}
-              </TemplatePanel>
-
-              {selectedTemplate && (
-                <SelectedSummary>
-                  <SelectedKey>선택된 템플릿</SelectedKey>
-                  <SelectedVal>
-                    {selectedTemplate.title} ·{' '}
-                    {formatKRW(selectedTemplate.amount)}
-                  </SelectedVal>
-                </SelectedSummary>
-              )}
-
-              <IncentiveCard
-                style={{
-                  opacity: selectedTemplate ? 1 : 0.55,
-                }}
-              >
-                <IncentiveLabel>인센티브 · 프로모션 수당</IncentiveLabel>
+          <Scroll>
+            <FormPanel>
+              <FieldGroup>
+                <FieldLabel>회사명 (또는 근무지)</FieldLabel>
                 <Input
-                  placeholder="0"
-                  inputMode="numeric"
-                  disabled={!selectedTemplate}
-                  value={incentiveRaw}
-                  onChange={(e) => handleIncentiveChange(e.target.value)}
+                  placeholder="예: 쿠팡, 배달의민족 등"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  enterKeyHint="next"
                 />
-                <IncentiveHint>
-                  템플릿 입금액에 추가로 더할 금액만 입력하세요. (없으면
-                  비워두기)
-                </IncentiveHint>
-              </IncentiveCard>
-            </Scroll>
-          )}
+              </FieldGroup>
+              <FieldGroup>
+                <FieldLabel>급여 (기본급)</FieldLabel>
+                <Input
+                  placeholder="공제 후 실제 받은 급여 입력"
+                  inputMode="numeric"
+                  value={salaryRaw}
+                  onChange={(e) => setSalaryRaw(e.target.value)}
+                  enterKeyHint="next"
+                />
+              </FieldGroup>
+              <FieldGroup>
+                <FieldLabel>인센티브 (프로모션 수당)</FieldLabel>
+                <Input
+                  placeholder="추가 수당 입력 (없으면 비워두기)"
+                  inputMode="numeric"
+                  value={incentiveRaw}
+                  onChange={(e) => setIncentiveRaw(e.target.value)}
+                  enterKeyHint="done"
+                />
+              </FieldGroup>
+            </FormPanel>
+          </Scroll>
 
-          <AddTemplateBlock $focused={isAddingTemplate}>
-            <ToggleBtn
-              type="button"
-              $open={addOpen}
-              onClick={() => {
-                setAddOpen((v) => {
-                  const next = !v
-                  if (!next) resetTemplateForm()
-                  return next
-                })
-              }}
-            >
-              <span>
-                {isEditingTemplate ? '템플릿 수정' : '+ 새 템플릿 등록'}
-              </span>
-              <span aria-hidden>{addOpen ? '▲' : '▼'}</span>
-            </ToggleBtn>
-            <AccordionPanel $open={addOpen} $focused={isAddingTemplate}>
-              <AddForm
-                $focused={isAddingTemplate}
-                onSubmit={handleTemplateFormSubmit}
+          <StickyBottom>
+            <FinalLine>
+              <FinalCombined>
+                <FinalStrong>
+                  {isToday ? '오늘의 최종 급여' : '최종 급여'}
+                </FinalStrong>
+                {': '}
+                {formatKRW(finalPreview)}
+              </FinalCombined>
+            </FinalLine>
+            <ActionRow>
+              <SubmitBtn
+                type="button"
+                disabled={!canSubmit}
+                onClick={handleSubmit}
               >
-                <div>
-                  <FieldLabel>제목</FieldLabel>
-                  <Input
-                    placeholder="예: 쿠팡 공휴일"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    enterKeyHint="next"
-                  />
-                </div>
-                <div>
-                  <FieldLabel>실제 입금액 (원)</FieldLabel>
-                  <Input
-                    placeholder="135404"
-                    inputMode="numeric"
-                    enterKeyHint="done"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                  />
-                </div>
-                <SaveTplBtn
-                  type="submit"
-                  disabled={!newTitle.trim() || newAmountNum <= 0}
-                >
-                  {isEditingTemplate ? '템플릿 수정 완료' : '템플릿 저장'}
-                </SaveTplBtn>
-              </AddForm>
-            </AccordionPanel>
-          </AddTemplateBlock>
-
-          {!isAddingTemplate && (
-            <StickyBottom>
-              <FinalLine>
-                <FinalCombined>
-                  <FinalStrong>
-                    {isToday ? '오늘의 최종 급여' : '최종 급여'}
-                  </FinalStrong>
-                  {': '}
-                  {formatKRW(finalPreview)}
-                </FinalCombined>
-              </FinalLine>
-              <ActionRow>
-                <SubmitBtn
+                {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
+              </SubmitBtn>
+              {hasExistingRecord && (
+                <DeleteRecordBtn
                   type="button"
-                  disabled={!canSubmit}
-                  onClick={handleSubmit}
+                  aria-label="이 날의 근무 기록 삭제"
+                  onClick={handleDeleteRecord}
                 >
-                  {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
-                </SubmitBtn>
-                {hasExistingRecord && (
-                  <DeleteRecordBtn
-                    type="button"
-                    aria-label="이 날의 근무 기록 삭제"
-                    onClick={handleDeleteRecord}
-                  >
-                    삭제하기
-                  </DeleteRecordBtn>
-                )}
-              </ActionRow>
-            </StickyBottom>
-          )}
+                  삭제하기
+                </DeleteRecordBtn>
+              )}
+            </ActionRow>
+          </StickyBottom>
         </Sheet>
       </SheetWrap>
     </Root>
