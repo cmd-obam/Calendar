@@ -5,6 +5,16 @@ import MonthlyReportModal from './MonthlyReportModal'
 import SettingsModal from './SettingsModal'
 import TopAppBar from './TopAppBar'
 import { sumMonthlyTotalIncome } from '../lib/monthlySettlement'
+import {
+  calcExpenseRatioPercent,
+  calcIncomeAchievementRatio,
+  calcMonthlyTargetSavings,
+  calcSavingsProgressRatio,
+  clampGaugePercent,
+  formatRatioOneDecimal,
+  parseWonInput,
+  toWonInteger,
+} from '../lib/financeMetrics'
 import { useWageStore } from '../store/useWageStore'
 import { getHolidayName } from '../utils/holidays'
 
@@ -95,15 +105,23 @@ const NavButton = styled.button`
 
 const StatBlockRow = styled.div`
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.65rem;
+  align-items: stretch;
+  gap: 0.75rem;
   margin-bottom: 0.85rem;
 `
 
-const DetailButton = styled.button`
+const ActionButtonCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   flex-shrink: 0;
-  margin-top: 0.15rem;
+  width: 4.85rem;
+`
+
+const DetailButton = styled.button`
+  flex: 1;
+  width: 100%;
+  min-height: 0;
   padding: 0.4rem 0.65rem;
   font-size: 0.68rem;
   font-weight: 800;
@@ -115,6 +133,9 @@ const DetailButton = styled.button`
   touch-action: manipulation;
   white-space: nowrap;
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   &:active {
     transform: scale(0.97);
@@ -124,6 +145,9 @@ const DetailButton = styled.button`
 const StatBlock = styled.div`
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: linear-gradient(
     135deg,
     var(--cal-accent-soft, #eef2ff) 0%,
@@ -151,10 +175,11 @@ const StatValue = styled.p`
   color: var(--cal-accent-strong, #4338ca);
 `
 
-const GoalRow = styled.label`
+const GoalRow = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  margin-top: 0.15rem;
 `
 
 const GoalTop = styled.div`
@@ -219,7 +244,30 @@ const ProgressMeta = styled.div`
   justify-content: space-between;
   font-size: 0.72rem;
   color: var(--cal-text-dim, #6b7280);
-  margin-top: 0.35rem;
+`
+
+const FinanceGaugeSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--cal-border, #f3f4f6);
+`
+
+const GaugeBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+`
+
+const GaugeLabel = styled.p`
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--cal-text-dim, #6b7280);
+  word-break: keep-all;
 `
 
 const CalendarSection = styled.div`
@@ -436,10 +484,19 @@ export default function MainCalendar() {
   const [showAmounts, setShowAmounts] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
+  /** 추후 소비내역·목표저축 모달과 연동 — 초기값 0원 */
+  const [totalExpense] = useState(0)
+  const [currentSavings] = useState(0)
+  const [savingsTargetAmount] = useState(0)
+  const [savingsTargetMonths] = useState(0)
+
   const year = cursor.getFullYear()
   const monthIndex = cursor.getMonth()
   const yearMonthKey = `${year}-${pad2(monthIndex + 1)}`
-  const monthlyGoal = monthlyGoals[yearMonthKey] ?? 0
+  const monthlyGoal = useMemo(
+    () => toWonInteger(monthlyGoals[yearMonthKey] ?? 0),
+    [monthlyGoals, yearMonthKey],
+  )
 
   const monthLabel = useMemo(
     () =>
@@ -455,12 +512,74 @@ export default function MainCalendar() {
     [workLogs, year, monthIndex],
   )
 
-  const progressPct = useMemo(() => {
-    if (monthlyGoal <= 0) return 0
-    return Math.min(100, (monthTotal / monthlyGoal) * 100)
-  }, [monthTotal, monthlyGoal])
+  const totalIncome = useMemo(() => toWonInteger(monthTotal), [monthTotal])
 
-  const today = useMemo(() => new Date(), []) // 렌더 시점의 “오늘” — 필요 시 앱 레벨에서 갱신 가능
+  const incomeAchievementRatio = useMemo(
+    () => calcIncomeAchievementRatio(totalIncome, monthlyGoal),
+    [totalIncome, monthlyGoal],
+  )
+  const incomeAchievementLabel = useMemo(
+    () => formatRatioOneDecimal(incomeAchievementRatio),
+    [incomeAchievementRatio],
+  )
+  const incomeAchievementBarWidth = useMemo(
+    () => clampGaugePercent(incomeAchievementRatio),
+    [incomeAchievementRatio],
+  )
+
+  const totalExpenseWon = useMemo(
+    () => toWonInteger(totalExpense),
+    [totalExpense],
+  )
+  const currentSavingsWon = useMemo(
+    () => toWonInteger(currentSavings),
+    [currentSavings],
+  )
+  const savingsTargetAmountWon = useMemo(
+    () => toWonInteger(savingsTargetAmount),
+    [savingsTargetAmount],
+  )
+  const savingsTargetMonthsSafe = useMemo(() => {
+    const months = Math.floor(savingsTargetMonths)
+    return Number.isFinite(months) && months > 0 ? months : 0
+  }, [savingsTargetMonths])
+
+  const expenseRatio = useMemo(
+    () => calcExpenseRatioPercent(totalExpenseWon, totalIncome),
+    [totalExpenseWon, totalIncome],
+  )
+  const expenseRatioLabel = useMemo(
+    () => formatRatioOneDecimal(expenseRatio),
+    [expenseRatio],
+  )
+  const expenseBarWidth = useMemo(
+    () => clampGaugePercent(expenseRatio),
+    [expenseRatio],
+  )
+
+  const monthlyTargetSavings = useMemo(
+    () =>
+      calcMonthlyTargetSavings(
+        savingsTargetAmountWon,
+        savingsTargetMonthsSafe,
+      ),
+    [savingsTargetAmountWon, savingsTargetMonthsSafe],
+  )
+  const savingsProgressRatio = useMemo(
+    () =>
+      calcSavingsProgressRatio(currentSavingsWon, monthlyTargetSavings),
+    [currentSavingsWon, monthlyTargetSavings],
+  )
+  const savingsProgressLabel = useMemo(
+    () => formatRatioOneDecimal(savingsProgressRatio),
+    [savingsProgressRatio],
+  )
+  const savingsBarWidth = useMemo(
+    () => clampGaugePercent(savingsProgressRatio),
+    [savingsProgressRatio],
+  )
+
+  const today = useMemo(() => new Date(), [])
   const todayKey = toDateKey(
     today.getFullYear(),
     today.getMonth(),
@@ -499,8 +618,7 @@ export default function MainCalendar() {
 
   const handleGoalChange = useCallback(
     (raw: string) => {
-      const n = Number(raw.replace(/,/g, ''))
-      setMonthlyGoal(yearMonthKey, Number.isFinite(n) ? n : 0)
+      setMonthlyGoal(yearMonthKey, parseWonInput(raw))
     },
     [setMonthlyGoal, yearMonthKey],
   )
@@ -529,17 +647,38 @@ export default function MainCalendar() {
             </NavButton>
           </MonthNav>
 
-          <StatBlockRow>
+          <StatBlockRow className="flex items-stretch gap-x-3">
             <StatBlock>
               <StatLabel>이번 달 총 수입</StatLabel>
               <StatValue>{formatKRW(monthTotal)}</StatValue>
             </StatBlock>
-            <DetailButton
-              type="button"
-              onClick={() => setReportOpen(true)}
-            >
-              상세 보기
-            </DetailButton>
+            <ActionButtonCol className="flex flex-col gap-y-2">
+              <DetailButton
+                type="button"
+                className="flex-1"
+                onClick={() => setReportOpen(true)}
+              >
+                상세 보기
+              </DetailButton>
+              <DetailButton
+                type="button"
+                className="flex-1"
+                onClick={() =>
+                  window.alert('소비 내역 설정 모달은 준비 중입니다.')
+                }
+              >
+                소비 내역
+              </DetailButton>
+              <DetailButton
+                type="button"
+                className="flex-1"
+                onClick={() =>
+                  window.alert('목표 저축 설정 모달은 준비 중입니다.')
+                }
+              >
+                목표 저축
+              </DetailButton>
+            </ActionButtonCol>
           </StatBlockRow>
 
           <GoalRow>
@@ -558,23 +697,75 @@ export default function MainCalendar() {
                 <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>원</span>
               </GoalInputWrap>
             </GoalTop>
-            <ProgressTrack>
-              <ProgressFill pct={progressPct} />
+            <ProgressTrack
+              role="progressbar"
+              aria-valuenow={incomeAchievementBarWidth}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+            >
+              <ProgressFill pct={incomeAchievementBarWidth} />
             </ProgressTrack>
             <ProgressMeta>
               <span>
                 달성률{' '}
                 {monthlyGoal > 0
-                  ? `${progressPct.toFixed(1)}%`
+                  ? `${incomeAchievementLabel}%`
                   : '목표 미설정'}
               </span>
               <span>
                 {monthlyGoal > 0
-                  ? `${formatKRW(monthTotal)} / ${formatKRW(monthlyGoal)}`
+                  ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
                   : '—'}
               </span>
             </ProgressMeta>
           </GoalRow>
+
+          <FinanceGaugeSection>
+            <GaugeBlock>
+              <GaugeLabel>
+                지출 비율: {formatKRW(totalExpenseWon)} /{' '}
+                {formatKRW(totalIncome)} ({expenseRatioLabel}%)
+              </GaugeLabel>
+              <div
+                className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100"
+                role="progressbar"
+                aria-valuenow={expenseBarWidth}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`지출 비율 ${expenseRatioLabel}%`}
+              >
+                <div
+                  className="h-full rounded-full bg-red-500 transition-all duration-500 ease-out"
+                  style={{ width: `${expenseBarWidth}%` }}
+                />
+              </div>
+            </GaugeBlock>
+
+            <GaugeBlock>
+              <GaugeLabel>
+                저축 달성률: {formatKRW(currentSavingsWon)} /{' '}
+                {formatKRW(monthlyTargetSavings)} (
+                {monthlyTargetSavings > 0
+                  ? `${savingsProgressLabel}%`
+                  : '0.0%'}
+                )
+              </GaugeLabel>
+              <div
+                className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100"
+                role="progressbar"
+                aria-valuenow={savingsBarWidth}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`저축 달성률 ${savingsProgressLabel}%`}
+              >
+                <div
+                  className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
+                  style={{ width: `${savingsBarWidth}%` }}
+                />
+              </div>
+            </GaugeBlock>
+          </FinanceGaugeSection>
         </Dashboard>
       </Card>
 
