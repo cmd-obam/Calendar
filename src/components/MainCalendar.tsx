@@ -1,6 +1,7 @@
 import styled from '@emotion/styled'
 import { useCallback, useMemo, useState } from 'react'
 import CalendarEntryModal from './CalendarEntryModal'
+import ExpenseHistory from './ExpenseHistory'
 import MonthlyReportModal from './MonthlyReportModal'
 import SettingsModal from './SettingsModal'
 import TopAppBar from './TopAppBar'
@@ -108,14 +109,17 @@ const StatBlockRow = styled.div`
   align-items: stretch;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+  width: 100%;
 `
 
 const ActionButtonCol = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex-shrink: 0;
-  width: 4.85rem;
+  flex: 1;
+  min-width: 4.85rem;
+  max-width: 5.25rem;
+  align-self: stretch;
 `
 
 const DetailButton = styled.button`
@@ -345,7 +349,9 @@ const DayCell = styled.button<{
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  min-height: 4.5rem;
+  height: 5rem;
+  max-height: 5rem;
+  min-height: 5rem;
   padding: 0.26rem 0.2rem 0.3rem 0.28rem;
   border: none;
   border-radius: 10px;
@@ -387,15 +393,18 @@ const DayCellBody = styled.div`
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.12rem;
+  gap: 0.125rem;
   min-width: 0;
+  min-height: 0;
   width: 100%;
+  height: 100%;
   overflow: hidden;
   flex: 1;
 `
 
 const DayNum = styled.span<{ $isHoliday?: boolean }>`
   flex-shrink: 0;
+  margin: 0;
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.1;
@@ -403,31 +412,20 @@ const DayNum = styled.span<{ $isHoliday?: boolean }>`
     $isHoliday ? 'var(--cal-sun, #ef4444)' : 'inherit'};
 `
 
-const HolidayLabel = styled.span`
-  display: block;
-  min-width: 0;
-  width: 100%;
-  font-size: 0.625rem;
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--cal-sun, #ef4444);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
 const LogBadge = styled.div`
+  flex: 1;
   min-width: 0;
+  min-height: 0;
   width: 100%;
-  margin-top: 0.375rem;
-  padding: 0.125rem 0.25rem;
+  padding: 0.375rem 0.5rem;
   border-radius: 5px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.22);
   display: flex;
   flex-direction: column;
-  gap: 0;
-  overflow: visible;
+  justify-content: space-between;
+  gap: 0.125rem;
+  overflow: hidden;
   box-sizing: border-box;
 `
 
@@ -453,6 +451,8 @@ const LogTitle = styled.span`
 const LogWageWrap = styled.div`
   width: 100%;
   text-align: center;
+  margin-top: auto;
+  flex-shrink: 0;
 `
 
 const LogWage = styled.span`
@@ -483,6 +483,7 @@ export default function MainCalendar() {
   const [reportOpen, setReportOpen] = useState(false)
   const [showAmounts, setShowAmounts] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
 
   /** 추후 소비내역·목표저축 모달과 연동 — 초기값 0원 */
   const [totalExpense] = useState(0)
@@ -623,6 +624,14 @@ export default function MainCalendar() {
     [setMonthlyGoal, yearMonthKey],
   )
 
+  if (expenseHistoryOpen) {
+    return (
+      <AppFrame>
+        <ExpenseHistory onBack={() => setExpenseHistoryOpen(false)} />
+      </AppFrame>
+    )
+  }
+
   return (
     <AppFrame>
       <TopAppBar onOpenSettings={() => setIsSettingsOpen(true)} />
@@ -647,12 +656,12 @@ export default function MainCalendar() {
             </NavButton>
           </MonthNav>
 
-          <StatBlockRow className="flex items-stretch gap-x-3">
-            <StatBlock>
+          <StatBlockRow className="flex w-full items-stretch gap-x-3">
+            <StatBlock className="flex min-h-0 flex-1 flex-col justify-center">
               <StatLabel>이번 달 총 수입</StatLabel>
               <StatValue>{formatKRW(monthTotal)}</StatValue>
             </StatBlock>
-            <ActionButtonCol className="flex flex-col gap-y-2">
+            <ActionButtonCol className="flex flex-1 flex-col gap-y-2 self-stretch">
               <DetailButton
                 type="button"
                 className="flex-1"
@@ -663,9 +672,7 @@ export default function MainCalendar() {
               <DetailButton
                 type="button"
                 className="flex-1"
-                onClick={() =>
-                  window.alert('소비 내역 설정 모달은 준비 중입니다.')
-                }
+                onClick={() => setExpenseHistoryOpen(true)}
               >
                 소비 내역
               </DetailButton>
@@ -812,6 +819,7 @@ export default function MainCalendar() {
                 <DayCell
                   key={idx}
                   type="button"
+                  className="h-20 overflow-hidden"
                   muted={muted}
                   disabled={muted}
                   isSelected={isSelected}
@@ -825,15 +833,15 @@ export default function MainCalendar() {
                   }
                 >
                   {!muted && day != null && (
-                    <DayCellBody>
-                      <DayNum $isHoliday={isHoliday}>{day}</DayNum>
-                      {holidayName && (
-                        <HolidayLabel title={holidayName}>
-                          {holidayName}
-                        </HolidayLabel>
-                      )}
+                    <DayCellBody className="flex flex-col gap-y-0.5">
+                      <DayNum
+                        className={isHoliday ? 'text-red-500' : undefined}
+                        $isHoliday={isHoliday}
+                      >
+                        {day}
+                      </DayNum>
                       {showAmounts && log && (
-                        <LogBadge>
+                        <LogBadge className="flex flex-1 flex-col justify-between py-1.5 px-2">
                           <LogTitleWrap>
                             <LogTitle className="leading-tight" title={log.title}>
                               {log.title}
