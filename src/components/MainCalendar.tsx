@@ -352,7 +352,7 @@ const DayCell = styled.button<{
   height: 5rem;
   max-height: 5rem;
   min-height: 5rem;
-  padding: 0.26rem 0.2rem 0.3rem 0.28rem;
+  padding: 0.26rem 0.125rem 0.3rem 0.125rem;
   border: none;
   border-radius: 10px;
   overflow: hidden;
@@ -417,14 +417,14 @@ const LogBadge = styled.div`
   min-width: 0;
   min-height: 0;
   width: 100%;
-  padding: 0.375rem 0.5rem;
+  padding: 0.25rem 0.125rem;
   border-radius: 5px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.22);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.125rem;
+  gap: 0.0625rem;
   overflow: hidden;
   box-sizing: border-box;
 `
@@ -449,8 +449,12 @@ const LogTitle = styled.span`
 `
 
 const LogWageWrap = styled.div`
+  display: flex;
   width: 100%;
-  text-align: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
   margin-top: auto;
   flex-shrink: 0;
 `
@@ -463,13 +467,15 @@ const LogWage = styled.span`
   white-space: nowrap;
   font-weight: 900;
   line-height: 1;
+  letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
   color: var(--cal-accent-strong, #4338ca);
 `
 
 const LogWageUnit = styled.span`
   font-weight: 700;
-  margin-left: 0.5px;
+  margin-left: 0;
+  letter-spacing: -0.05em;
 `
 
 export default function MainCalendar() {
@@ -819,7 +825,7 @@ export default function MainCalendar() {
                 <DayCell
                   key={idx}
                   type="button"
-                  className="h-20 overflow-hidden"
+                  className="h-20 overflow-hidden px-0.5"
                   muted={muted}
                   disabled={muted}
                   isSelected={isSelected}
@@ -841,19 +847,19 @@ export default function MainCalendar() {
                         {day}
                       </DayNum>
                       {showAmounts && log && (
-                        <LogBadge className="flex flex-1 flex-col justify-between py-1.5 px-2">
+                        <LogBadge className="flex flex-1 flex-col justify-between px-0.5 py-1">
                           <LogTitleWrap>
                             <LogTitle className="leading-tight" title={log.title}>
                               {log.title}
                             </LogTitle>
                           </LogTitleWrap>
-                          <LogWageWrap>
+                          <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
                             <LogWage
-                              className="text-[9px] tracking-tighter whitespace-nowrap"
+                              className="whitespace-nowrap text-[8px] tracking-[-0.05em]"
                               title={formatKRW(log.finalWage)}
                             >
                               {formatKRWAmount(log.finalWage)}
-                              <LogWageUnit className="text-[8px] font-bold text-gray-500">
+                              <LogWageUnit className="text-[7px] font-bold tracking-[-0.05em] text-gray-500">
                                 원
                               </LogWageUnit>
                             </LogWage>
