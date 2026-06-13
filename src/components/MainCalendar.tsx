@@ -471,8 +471,10 @@ const LogWage = styled.span`
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
+  gap: 2px;
   max-width: 100%;
   white-space: nowrap;
+  font-size: 8px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.05em;
@@ -481,9 +483,11 @@ const LogWage = styled.span`
 `
 
 const LogWageUnit = styled.span`
-  font-weight: 700;
-  margin-left: 0;
-  letter-spacing: -0.05em;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
 `
 
 export interface MainCalendarProps {
@@ -873,13 +877,11 @@ export default function MainCalendar({
                           </LogTitleWrap>
                           <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
                             <LogWage
-                              className="whitespace-nowrap text-[8px] tracking-[-0.05em]"
+                              className="flex items-baseline gap-x-[2px] whitespace-nowrap text-[8px] tracking-[-0.05em]"
                               title={formatKRW(log.finalWage)}
                             >
-                              {formatKRWAmount(log.finalWage)}
-                              <LogWageUnit className="text-[7px] font-bold tracking-[-0.05em] text-gray-500">
-                                원
-                              </LogWageUnit>
+                              <span>{formatKRWAmount(log.finalWage)}</span>
+                              <LogWageUnit>원</LogWageUnit>
                             </LogWage>
                           </LogWageWrap>
                         </LogBadge>
