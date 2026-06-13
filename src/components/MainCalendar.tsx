@@ -856,7 +856,7 @@ export default function MainCalendar({
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${showAmounts && log ? `, ${log.title}, ${formatKRW(log.finalWage)}` : log && !showAmounts ? ', 근무 기록 있음' : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? `, ${log.title}${showAmounts ? `, ${formatKRW(log.finalWage)}` : ', 금액 숨김'}` : ''}`
                       : '빈 칸'
                   }
                 >
@@ -868,22 +868,26 @@ export default function MainCalendar({
                       >
                         {day}
                       </DayNum>
-                      {showAmounts && log && (
-                        <LogBadge className="flex flex-1 flex-col justify-between px-0.5 py-1">
+                      {log && (
+                        <LogBadge
+                          className={`flex flex-1 flex-col px-0.5 py-1 ${showAmounts ? 'justify-between' : 'justify-center'}`}
+                        >
                           <LogTitleWrap>
                             <LogTitle className="leading-tight" title={log.title}>
                               {log.title}
                             </LogTitle>
                           </LogTitleWrap>
-                          <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
-                            <LogWage
-                              className="flex items-baseline gap-x-[2px] whitespace-nowrap text-[8px] tracking-[-0.05em]"
-                              title={formatKRW(log.finalWage)}
-                            >
-                              <span>{formatKRWAmount(log.finalWage)}</span>
-                              <LogWageUnit>원</LogWageUnit>
-                            </LogWage>
-                          </LogWageWrap>
+                          {showAmounts ? (
+                            <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
+                              <LogWage
+                                className="flex items-baseline gap-x-[2px] whitespace-nowrap text-[8px] tracking-[-0.05em]"
+                                title={formatKRW(log.finalWage)}
+                              >
+                                <span>{formatKRWAmount(log.finalWage)}</span>
+                                <LogWageUnit>원</LogWageUnit>
+                              </LogWage>
+                            </LogWageWrap>
+                          ) : null}
                         </LogBadge>
                       )}
                     </DayCellBody>
