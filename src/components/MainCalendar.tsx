@@ -1,5 +1,11 @@
 import styled from '@emotion/styled'
-import { useCallback, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import CalendarEntryModal from './CalendarEntryModal'
 import ExpenseHistory from './ExpenseHistory'
 import MonthlyReportModal from './MonthlyReportModal'
@@ -18,6 +24,8 @@ import {
 } from '../lib/financeMetrics'
 import { useWageStore } from '../store/useWageStore'
 import { getHolidayName } from '../utils/holidays'
+import type { ExpenseItem } from '../lib/expenseHistoryUtils'
+import { sumMonthlyExpenses } from '../lib/expenseHistoryUtils'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
 
@@ -478,7 +486,15 @@ const LogWageUnit = styled.span`
   letter-spacing: -0.05em;
 `
 
-export default function MainCalendar() {
+export interface MainCalendarProps {
+  expenses: ExpenseItem[]
+  setExpenses: Dispatch<SetStateAction<ExpenseItem[]>>
+}
+
+export default function MainCalendar({
+  expenses,
+  setExpenses,
+}: MainCalendarProps) {
   const workLogs = useWageStore((s) => s.workLogs)
   const monthlyGoals = useWageStore((s) => s.monthlyGoals)
   const selectedDate = useWageStore((s) => s.selectedDate)
@@ -491,8 +507,6 @@ export default function MainCalendar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
 
-  /** 추후 소비내역·목표저축 모달과 연동 — 초기값 0원 */
-  const [totalExpense] = useState(0)
   const [currentSavings] = useState(0)
   const [savingsTargetAmount] = useState(0)
   const [savingsTargetMonths] = useState(0)
@@ -535,8 +549,8 @@ export default function MainCalendar() {
   )
 
   const totalExpenseWon = useMemo(
-    () => toWonInteger(totalExpense),
-    [totalExpense],
+    () => sumMonthlyExpenses(expenses, year, monthIndex),
+    [expenses, year, monthIndex],
   )
   const currentSavingsWon = useMemo(
     () => toWonInteger(currentSavings),
@@ -633,7 +647,11 @@ export default function MainCalendar() {
   if (expenseHistoryOpen) {
     return (
       <AppFrame>
-        <ExpenseHistory onBack={() => setExpenseHistoryOpen(false)} />
+        <ExpenseHistory
+          expenses={expenses}
+          setExpenses={setExpenses}
+          onBack={() => setExpenseHistoryOpen(false)}
+        />
       </AppFrame>
     )
   }

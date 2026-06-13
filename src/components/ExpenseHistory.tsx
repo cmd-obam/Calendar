@@ -1,10 +1,13 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import ExpenseEntryModal, { type ExpenseEntryDraft } from './ExpenseEntryModal'
 import {
+  createExpenseId,
   exceedsSixMonthRange,
   filterExpensesByRange,
   sortExpenses,
   subtractMonthsFromDateKey,
   todayDateKey,
+  toExpenseAmount,
   type ExpenseItem,
   type ExpenseSortKey,
 } from '../lib/expenseHistoryUtils'
@@ -21,16 +24,21 @@ function formatKRW(n: number): string {
   return `${Math.floor(n).toLocaleString('ko-KR')}원`
 }
 
-function formatDisplayDate(dateKey: string): string {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  return `${y}년 ${m}월 ${d}일`
+function formatListDate(dateKey: string): string {
+  return dateKey
 }
 
 export interface ExpenseHistoryProps {
+  expenses: ExpenseItem[]
+  setExpenses: Dispatch<SetStateAction<ExpenseItem[]>>
   onBack: () => void
 }
 
-export default function ExpenseHistory({ onBack }: ExpenseHistoryProps) {
+export default function ExpenseHistory({
+  expenses,
+  setExpenses,
+  onBack,
+}: ExpenseHistoryProps) {
   const initialEnd = todayDateKey()
   const initialStart = subtractMonthsFromDateKey(initialEnd, 1)
 
@@ -38,7 +46,7 @@ export default function ExpenseHistory({ onBack }: ExpenseHistoryProps) {
   const [startDate, setStartDate] = useState(initialStart)
   const [endDate, setEndDate] = useState(initialEnd)
   const [rangeError, setRangeError] = useState<string | null>(null)
-  const [expenses] = useState<ExpenseItem[]>([])
+  const [entryModalOpen, setEntryModalOpen] = useState(false)
 
   const validateAndApplyRange = useCallback(
     (nextStart: string, nextEnd: string): boolean => {
@@ -89,8 +97,24 @@ export default function ExpenseHistory({ onBack }: ExpenseHistoryProps) {
   }, [expenses, startDate, endDate, sortKey, rangeError])
 
   const handleAddClick = useCallback(() => {
-    window.alert('소비 내역 입력 모달 띄우기')
+    setEntryModalOpen(true)
   }, [])
+
+  const handleSaveExpense = useCallback(
+    (entry: ExpenseEntryDraft) => {
+      setExpenses((prev) => [
+        ...prev,
+        {
+          id: createExpenseId(),
+          date: entry.date,
+          category: entry.category.trim(),
+          content: entry.content.trim(),
+          amount: toExpenseAmount(entry.amount),
+        },
+      ])
+    },
+    [setExpenses],
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -173,22 +197,25 @@ export default function ExpenseHistory({ onBack }: ExpenseHistoryProps) {
             <p className="text-sm font-semibold">조회된 데이터가 없습니다.</p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2.5">
+          <ul className="flex flex-col">
             {filteredItems.map((item) => (
               <li
                 key={item.id}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-3.5 shadow-sm"
+                className="mb-3 rounded-lg bg-white p-4 shadow-sm"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-gray-500">
-                      {formatDisplayDate(item.date)}
-                    </p>
-                    <p className="mt-1 truncate text-sm font-black text-gray-900">
-                      {item.merchant}
-                    </p>
+                <p className="text-xs font-semibold text-gray-400">
+                  {formatListDate(item.date)}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="inline-flex shrink-0 items-center rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                      {item.category}
+                    </span>
+                    <span className="truncate text-sm font-semibold text-gray-800">
+                      {item.content}
+                    </span>
                   </div>
-                  <p className="shrink-0 text-sm font-black tabular-nums text-indigo-700">
+                  <p className="shrink-0 text-lg font-bold tabular-nums text-gray-800">
                     {formatKRW(item.amount)}
                   </p>
                 </div>
@@ -207,6 +234,12 @@ export default function ExpenseHistory({ onBack }: ExpenseHistoryProps) {
         <span className="text-xl leading-none">+</span>
         <span>추가</span>
       </button>
+
+      <ExpenseEntryModal
+        open={entryModalOpen}
+        onClose={() => setEntryModalOpen(false)}
+        onSave={handleSaveExpense}
+      />
     </div>
   )
 }

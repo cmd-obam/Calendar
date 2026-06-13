@@ -4,8 +4,38 @@ export interface ExpenseItem {
   id: string
   /** YYYY-MM-DD */
   date: string
-  merchant: string
+  category: string
+  content: string
   amount: number
+}
+
+export function createExpenseId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+/** 저장·합산 시 금액을 원 단위 정수로 보정 */
+export function toExpenseAmount(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.floor(n)
+}
+
+/** 당월 소비 내역 금액 합계 */
+export function sumMonthlyExpenses(
+  expenses: ExpenseItem[],
+  year: number,
+  monthIndex: number,
+): number {
+  const ym = `${year}-${pad2(monthIndex + 1)}`
+  let sum = 0
+  for (const item of expenses) {
+    if (!item.date.startsWith(ym)) continue
+    sum += toExpenseAmount(item.amount)
+  }
+  return sum
 }
 
 function pad2(n: number): string {
