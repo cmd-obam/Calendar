@@ -1,5 +1,21 @@
 @import 'tailwindcss';
 
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  label[for],
+  select,
+  summary {
+    @apply cursor-pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    @apply cursor-not-allowed;
+  }
+}
+
 /* 모바일 웹앱 베이스: 더블탭/포커스 시 의도치 않은 확대 완화는 viewport + 입력 폰트 크기(16px+)와 함께 사용하세요. */
 
 *,

@@ -342,6 +342,7 @@ const WeekHeadCell = styled.div<{ sunSat?: 'sun' | 'sat' }>`
 const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: 6rem;
   width: 100%;
   min-width: 0;
   gap: 3px;
@@ -357,9 +358,9 @@ const DayCell = styled.button<{
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  height: 5rem;
-  max-height: 5rem;
-  min-height: 5rem;
+  height: 6rem;
+  max-height: 6rem;
+  min-height: 6rem;
   padding: 0.26rem 0.125rem 0.3rem 0.125rem;
   border: none;
   border-radius: 10px;
@@ -623,6 +624,15 @@ export default function MainCalendar({
     return cells
   }, [year, monthIndex])
 
+  const expenseDatesInMonth = useMemo(() => {
+    const ym = `${year}-${pad2(monthIndex + 1)}`
+    const set = new Set<string>()
+    for (const item of expenses) {
+      if (item.date.startsWith(ym)) set.add(item.date)
+    }
+    return set
+  }, [expenses, year, monthIndex])
+
   const goPrevMonth = useCallback(() => {
     setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
   }, [])
@@ -842,12 +852,14 @@ export default function MainCalendar({
               const holidayName =
                 dateKey != null ? getHolidayName(dateKey) : undefined
               const isHoliday = holidayName != null
+              const hasExpense =
+                dateKey != null && expenseDatesInMonth.has(dateKey)
 
               return (
                 <DayCell
                   key={idx}
                   type="button"
-                  className="h-20 overflow-hidden px-0.5"
+                  className="h-24 min-h-24 max-h-24 overflow-hidden px-0.5"
                   muted={muted}
                   disabled={muted}
                   isSelected={isSelected}
@@ -856,28 +868,36 @@ export default function MainCalendar({
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? `, ${log.title}${showAmounts ? `, ${formatKRW(log.finalWage)}` : ', 금액 숨김'}` : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${hasExpense ? ', 소비 있음' : ''}${log ? `, ${log.title}${showAmounts ? `, ${formatKRW(log.finalWage)}` : ', 금액 숨김'}` : ''}`
                       : '빈 칸'
                   }
                 >
                   {!muted && day != null && (
                     <DayCellBody className="flex flex-col gap-y-0.5">
-                      <DayNum
-                        className={isHoliday ? 'text-red-500' : undefined}
-                        $isHoliday={isHoliday}
-                      >
-                        {day}
-                      </DayNum>
-                      {log && (
-                        <LogBadge
-                          className={`flex flex-1 flex-col px-0.5 py-1 ${showAmounts ? 'justify-between' : 'justify-center'}`}
+                      <div className="flex w-full min-w-0 items-center justify-between overflow-hidden">
+                        <DayNum
+                          className={isHoliday ? 'text-red-500' : undefined}
+                          $isHoliday={isHoliday}
                         >
-                          <LogTitleWrap>
-                            <LogTitle className="leading-tight" title={log.title}>
-                              {log.title}
-                            </LogTitle>
-                          </LogTitleWrap>
-                          {showAmounts ? (
+                          {day}
+                        </DayNum>
+                        {hasExpense && (
+                          <span className="mr-1.5 ml-1 inline-flex flex-shrink-0 items-center justify-center rounded-full bg-red-100 px-1.5 py-[2px] text-[10px] font-medium leading-none text-red-500">
+                            소비
+                          </span>
+                        )}
+                      </div>
+                      {log &&
+                        (showAmounts ? (
+                          <LogBadge className="flex flex-1 flex-col items-center justify-between px-0.5 py-1 text-center">
+                            <LogTitleWrap className="w-full text-center">
+                              <LogTitle
+                                className="w-full text-center leading-tight"
+                                title={log.title}
+                              >
+                                {log.title}
+                              </LogTitle>
+                            </LogTitleWrap>
                             <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
                               <LogWage
                                 className="flex items-baseline gap-x-[2px] whitespace-nowrap text-[8px] tracking-[-0.05em]"
@@ -887,9 +907,15 @@ export default function MainCalendar({
                                 <LogWageUnit>원</LogWageUnit>
                               </LogWage>
                             </LogWageWrap>
-                          ) : null}
-                        </LogBadge>
-                      )}
+                          </LogBadge>
+                        ) : (
+                          <span
+                            className="mx-auto inline-flex max-w-full items-center justify-center truncate rounded-md bg-indigo-100 px-2 py-[2px] text-[11px] font-medium leading-none text-indigo-700"
+                            title={log.title}
+                          >
+                            {log.title}
+                          </span>
+                        ))}
                     </DayCellBody>
                   )}
                 </DayCell>
@@ -902,6 +928,8 @@ export default function MainCalendar({
       <CalendarEntryModal
         open={selectedDate != null}
         onClose={() => setSelectedDate(null)}
+        expenses={expenses}
+        setExpenses={setExpenses}
       />
 
       <MonthlyReportModal

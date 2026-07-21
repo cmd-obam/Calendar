@@ -176,7 +176,7 @@ export default function TopAppBar({ onOpenSettings }: TopAppBarProps) {
               const isActiveSlide = index === activeIndex
               const className = `${SLIDE_ITEM_BASE} ${visualClass(visual)} ${
                 isActiveSlide && isNoticeInteractive
-                  ? 'cursor-pointer rounded-md active:bg-gray-100'
+                  ? 'rounded-md active:bg-gray-100'
                   : 'pointer-events-none'
               }`
 

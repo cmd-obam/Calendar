@@ -1,10 +1,26 @@
 import styled from '@emotion/styled'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
+import ExpenseEntryForm, { type ExpenseEntryDraft } from './ExpenseEntryForm'
+import {
+  createExpenseId,
+  getExpensesForDate,
+  toExpenseAmount,
+  type ExpenseItem,
+} from '../lib/expenseHistoryUtils'
 import {
   computeFinalDailyWage,
   useWageStore,
 } from '../store/useWageStore'
 import { getHolidayName } from '../utils/holidays'
+
+type EntryTab = 'wage' | 'expense'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -12,7 +28,7 @@ function pad2(n: number): string {
 
 function formatKoreanTitleDate(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number)
-  return `${y}년 ${pad2(m)}월 ${pad2(d)}일 근무 기록`
+  return `${y}년 ${pad2(m)}월 ${pad2(d)}일`
 }
 
 function formatKRW(n: number): string {
@@ -132,6 +148,38 @@ const Hint = styled.p`
   font-weight: 700;
   color: var(--cal-text-dim, #6b7280);
   line-height: 1.4;
+`
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+`
+
+const TabBtn = styled.button<{ $active: boolean }>`
+  flex: 1;
+  min-width: 0;
+  padding: 0.62rem 0.45rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ $active }) =>
+      $active ? 'transparent' : 'var(--cal-border, #e5e7eb)'};
+  background: ${({ $active }) =>
+    $active
+      ? 'linear-gradient(135deg, #4f46e5 0%, var(--cal-accent-mid, #818cf8) 100%)'
+      : 'var(--cal-muted, #f3f4f6)'};
+  color: ${({ $active }) => ($active ? '#fff' : 'var(--cal-text-dim, #6b7280)')};
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: ${({ $active }) =>
+    $active ? '0 6px 16px rgba(79, 70, 229, 0.28)' : 'none'};
+
+  &:active {
+    transform: scale(0.98);
+  }
 `
 
 const CloseBtn = styled.button`
@@ -298,11 +346,15 @@ const SubmitBtn = styled.button`
 export interface CalendarEntryModalProps {
   open: boolean
   onClose: () => void
+  expenses: ExpenseItem[]
+  setExpenses: Dispatch<SetStateAction<ExpenseItem[]>>
 }
 
 export default function CalendarEntryModal({
   open,
   onClose,
+  expenses,
+  setExpenses,
 }: CalendarEntryModalProps) {
   const workLogs = useWageStore((s) => s.workLogs)
   const selectedDate = useWageStore((s) => s.selectedDate)
@@ -320,9 +372,23 @@ export default function CalendarEntryModal({
   const hasExistingRecord = existingRecord != null
 
   const [sheetVisible, setSheetVisible] = useState(false)
+  const [activeTab, setActiveTab] = useState<EntryTab>('wage')
+  const [isAddingExpense, setIsAddingExpense] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null)
   const [companyName, setCompanyName] = useState('')
   const [salaryRaw, setSalaryRaw] = useState('')
   const [incentiveRaw, setIncentiveRaw] = useState('')
+
+  const dayExpenses = useMemo(
+    () => (selectedDate ? getExpensesForDate(expenses, selectedDate) : []),
+    [expenses, selectedDate],
+  )
+  const hasDayExpenses = dayExpenses.length > 0
+  const showExpenseForm =
+    !hasDayExpenses || isAddingExpense || editingExpense != null
+
+  const wageTabLabel = hasExistingRecord ? '급여 기록 수정' : '급여 입력'
+  const expenseTabLabel = hasDayExpenses ? '소비내역 확인' : '소비내역 입력'
 
   const resetForm = useCallback(() => {
     setCompanyName('')
@@ -342,6 +408,13 @@ export default function CalendarEntryModal({
       resetForm()
     }
   }, [open, selectedDate, workLogs, resetForm])
+
+  useEffect(() => {
+    if (!open || !selectedDate) return
+    setActiveTab('wage')
+    setIsAddingExpense(false)
+    setEditingExpense(null)
+  }, [open, selectedDate])
 
   useEffect(() => {
     if (!open) {
@@ -379,12 +452,18 @@ export default function CalendarEntryModal({
     window.setTimeout(() => {
       onClose()
       resetForm()
+      setActiveTab('wage')
+      setIsAddingExpense(false)
+      setEditingExpense(null)
     }, 320)
   }, [onClose, resetForm])
 
   const closeImmediate = useCallback(() => {
     resetForm()
     setSheetVisible(false)
+    setActiveTab('wage')
+    setIsAddingExpense(false)
+    setEditingExpense(null)
     onClose()
   }, [onClose, resetForm])
 
@@ -422,6 +501,68 @@ export default function CalendarEntryModal({
     resetForm()
   }, [selectedDate, hasExistingRecord, deleteWageRecord, resetForm])
 
+  const handleSaveExpense = useCallback(
+    (entry: ExpenseEntryDraft) => {
+      if (!selectedDate) return
+      if (editingExpense) {
+        setExpenses((prev) =>
+          prev.map((item) =>
+            item.id === editingExpense.id
+              ? {
+                  ...item,
+                  date: selectedDate,
+                  category: entry.category.trim(),
+                  content: entry.content.trim(),
+                  amount: toExpenseAmount(entry.amount),
+                }
+              : item,
+          ),
+        )
+      } else {
+        setExpenses((prev) => [
+          ...prev,
+          {
+            id: createExpenseId(),
+            date: selectedDate,
+            category: entry.category.trim(),
+            content: entry.content.trim(),
+            amount: toExpenseAmount(entry.amount),
+          },
+        ])
+      }
+      setIsAddingExpense(false)
+      setEditingExpense(null)
+    },
+    [selectedDate, setExpenses, editingExpense],
+  )
+
+  const handleDeleteExpense = useCallback(
+    (id: string) => {
+      if (!window.confirm('이 소비 내역을 삭제하시겠습니까?')) return
+      setExpenses((prev) => prev.filter((item) => item.id !== id))
+      if (editingExpense?.id === id) {
+        setEditingExpense(null)
+        setIsAddingExpense(false)
+      }
+    },
+    [setExpenses, editingExpense],
+  )
+
+  const handleEditExpense = useCallback((item: ExpenseItem) => {
+    setEditingExpense(item)
+    setIsAddingExpense(false)
+  }, [])
+
+  const handleCancelExpenseForm = useCallback(() => {
+    setIsAddingExpense(false)
+    setEditingExpense(null)
+  }, [])
+
+  const handleStartAddExpense = useCallback(() => {
+    setEditingExpense(null)
+    setIsAddingExpense(true)
+  }, [])
+
   if (!open && !sheetVisible) return null
 
   return (
@@ -456,7 +597,39 @@ export default function CalendarEntryModal({
                       </span>
                     )}
                   </div>
-                  <Hint>근무 정보 및 급여 입력</Hint>
+                  <Hint>
+                    {activeTab === 'wage'
+                      ? '근무 정보 및 급여 입력'
+                      : showExpenseForm
+                        ? '소비 내역을 입력하세요'
+                        : '등록된 소비 내역을 확인하세요'}
+                  </Hint>
+                  <TabBar role="tablist" aria-label="일정 입력 탭">
+                    <TabBtn
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'wage'}
+                      $active={activeTab === 'wage'}
+                      onClick={() => setActiveTab('wage')}
+                    >
+                      {wageTabLabel}
+                    </TabBtn>
+                    <TabBtn
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'expense'}
+                      $active={activeTab === 'expense'}
+                      onClick={() => {
+                        setActiveTab('expense')
+                        if (hasDayExpenses) {
+                          setIsAddingExpense(false)
+                          setEditingExpense(null)
+                        }
+                      }}
+                    >
+                      {expenseTabLabel}
+                    </TabBtn>
+                  </TabBar>
                 </HeaderText>
                 <CloseBtn
                   type="button"
@@ -470,68 +643,148 @@ export default function CalendarEntryModal({
           )}
 
           <Scroll>
-            <FormPanel>
-              <FieldGroup>
-                <FieldLabel>회사명 (또는 근무지)</FieldLabel>
-                <Input
-                  placeholder="예: 쿠팡, 배달의민족 등"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  enterKeyHint="next"
-                />
-              </FieldGroup>
-              <FieldGroup>
-                <FieldLabel>급여 (기본급)</FieldLabel>
-                <Input
-                  placeholder="공제 후 실제 받은 급여 입력"
-                  inputMode="numeric"
-                  value={salaryRaw}
-                  onChange={(e) => setSalaryRaw(e.target.value)}
-                  enterKeyHint="next"
-                />
-              </FieldGroup>
-              <FieldGroup>
-                <FieldLabel>인센티브 (프로모션 수당)</FieldLabel>
-                <Input
-                  placeholder="추가 수당 입력 (없으면 비워두기)"
-                  inputMode="numeric"
-                  value={incentiveRaw}
-                  onChange={(e) => setIncentiveRaw(e.target.value)}
-                  enterKeyHint="done"
-                />
-              </FieldGroup>
-            </FormPanel>
+            {activeTab === 'wage' ? (
+              <FormPanel>
+                <FieldGroup>
+                  <FieldLabel>회사명 (또는 근무지)</FieldLabel>
+                  <Input
+                    placeholder="예: 쿠팡, 배달의민족 등"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    enterKeyHint="next"
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>급여 (기본급)</FieldLabel>
+                  <Input
+                    placeholder="공제 후 실제 받은 급여 입력"
+                    inputMode="numeric"
+                    value={salaryRaw}
+                    onChange={(e) => setSalaryRaw(e.target.value)}
+                    enterKeyHint="next"
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>인센티브 (프로모션 수당)</FieldLabel>
+                  <Input
+                    placeholder="추가 수당 입력 (없으면 비워두기)"
+                    inputMode="numeric"
+                    value={incentiveRaw}
+                    onChange={(e) => setIncentiveRaw(e.target.value)}
+                    enterKeyHint="done"
+                  />
+                </FieldGroup>
+              </FormPanel>
+            ) : showExpenseForm && selectedDate ? (
+              <ExpenseEntryForm
+                key={
+                  editingExpense?.id ??
+                  (isAddingExpense ? `${selectedDate}-add` : `${selectedDate}-new`)
+                }
+                initialDate={selectedDate}
+                lockDate
+                initialValues={
+                  editingExpense
+                    ? {
+                        date: editingExpense.date,
+                        category: editingExpense.category,
+                        content: editingExpense.content,
+                        amount: editingExpense.amount,
+                      }
+                    : undefined
+                }
+                onSave={handleSaveExpense}
+                submitLabel={
+                  editingExpense ? '소비내역 수정하기' : '소비내역 저장하기'
+                }
+                onCancel={
+                  hasDayExpenses && (isAddingExpense || editingExpense != null)
+                    ? handleCancelExpenseForm
+                    : undefined
+                }
+              />
+            ) : (
+              <div className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-3">
+                  {dayExpenses.map((item) => (
+                    <li
+                      key={item.id}
+                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className="inline-flex shrink-0 items-center rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                            {item.category}
+                          </span>
+                          <span className="truncate text-sm font-semibold text-gray-800">
+                            {item.content}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <p className="text-sm font-bold tabular-nums text-gray-800">
+                            {formatKRW(item.amount)}
+                          </p>
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-blue-500 transition-colors hover:text-blue-700"
+                            onClick={() => handleEditExpense(item)}
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-red-500 transition-colors hover:text-red-700"
+                            onClick={() => handleDeleteExpense(item.id)}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="w-full rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50 py-4 text-base font-black text-indigo-700 transition active:scale-[0.99] active:bg-indigo-100"
+                  onClick={handleStartAddExpense}
+                >
+                  + 추가
+                </button>
+              </div>
+            )}
           </Scroll>
 
-          <StickyBottom>
-            <FinalLine>
-              <FinalCombined>
-                <FinalStrong>
-                  {isToday ? '오늘의 최종 급여' : '최종 급여'}
-                </FinalStrong>
-                {': '}
-                {formatKRW(finalPreview)}
-              </FinalCombined>
-            </FinalLine>
-            <ActionRow>
-              <SubmitBtn
-                type="button"
-                disabled={!canSubmit}
-                onClick={handleSubmit}
-              >
-                {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
-              </SubmitBtn>
-              {hasExistingRecord && (
-                <DeleteRecordBtn
+          {activeTab === 'wage' && (
+            <StickyBottom>
+              <FinalLine>
+                <FinalCombined>
+                  <FinalStrong>
+                    {isToday ? '오늘의 최종 급여' : '최종 급여'}
+                  </FinalStrong>
+                  {': '}
+                  {formatKRW(finalPreview)}
+                </FinalCombined>
+              </FinalLine>
+              <ActionRow>
+                <SubmitBtn
                   type="button"
-                  aria-label="이 날의 근무 기록 삭제"
-                  onClick={handleDeleteRecord}
+                  disabled={!canSubmit}
+                  onClick={handleSubmit}
                 >
-                  삭제하기
-                </DeleteRecordBtn>
-              )}
-            </ActionRow>
-          </StickyBottom>
+                  {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
+                </SubmitBtn>
+                {hasExistingRecord && (
+                  <DeleteRecordBtn
+                    type="button"
+                    aria-label="이 날의 근무 기록 삭제"
+                    onClick={handleDeleteRecord}
+                  >
+                    삭제하기
+                  </DeleteRecordBtn>
+                )}
+              </ActionRow>
+            </StickyBottom>
+          )}
         </Sheet>
       </SheetWrap>
     </Root>

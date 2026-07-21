@@ -116,3 +116,18 @@ export function filterExpensesByRange(
 ): ExpenseItem[] {
   return items.filter((item) => isDateInRange(item.date, startKey, endKey))
 }
+
+/** 특정 날짜(YYYY-MM-DD)의 소비 내역 */
+export function getExpensesForDate(
+  items: ExpenseItem[],
+  dateKey: string,
+): ExpenseItem[] {
+  return items.filter((item) => item.date === dateKey)
+}
+
+export function hasExpensesOnDate(
+  items: ExpenseItem[],
+  dateKey: string,
+): boolean {
+  return items.some((item) => item.date === dateKey)
+}
