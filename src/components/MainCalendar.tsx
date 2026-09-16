@@ -362,7 +362,7 @@ const DayHeader = styled.div`
 
 const DayNum = styled.span<{ $isHoliday?: boolean }>`
   flex-shrink: 0;
-  margin: 0;
+  margin: -2px 0 0 -2px;
   padding: 0;
   font-size: 0.75rem;
   font-weight: 600;
