@@ -95,43 +95,71 @@ const NavButton = styled.button`
   }
 `
 
-const SummaryCard = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+const MetricsRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border-radius: 16px;
+  border: 1px solid var(--cal-border, rgba(99, 102, 241, 0.14));
   background: linear-gradient(
     135deg,
     var(--cal-accent-soft, #eef2ff) 0%,
     var(--cal-surface, #fff) 72%
   );
-  border-radius: 16px;
-  padding: 1rem 1.05rem 0.95rem;
-  border: 1px solid var(--cal-border, rgba(99, 102, 241, 0.14));
-  margin-bottom: 0.75rem;
+  overflow: hidden;
 `
 
-const SummaryLabel = styled.p`
+const MetricBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.9rem 0.85rem;
+`
+
+const MetricDivider = styled.div`
+  width: 1px;
+  align-self: stretch;
+  margin: 0.7rem 0;
+  background: rgba(15, 23, 42, 0.1);
+`
+
+const MetricLabel = styled.p`
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   color: var(--cal-text-dim, #6b7280);
   letter-spacing: -0.01em;
+  white-space: nowrap;
 `
 
-const SummaryValue = styled.p`
+const MetricValue = styled.p<{ $accent?: boolean }>`
   margin: 0;
-  font-size: 1.75rem;
+  font-size: ${({ $accent }) => ($accent ? '1.2rem' : '1.15rem')};
   font-weight: 900;
-  letter-spacing: -0.04em;
-  color: var(--cal-accent-strong, #4338ca);
-  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: ${({ $accent }) =>
+    $accent ? 'var(--cal-accent-strong, #4338ca)' : '#111827'};
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const MetricMeta = styled.span`
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #4f46e5;
 `
 
 const QuickMenu = styled.div`
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
 `
 
 const QuickMenuBtn = styled.button`
@@ -165,47 +193,6 @@ const QuickLabel = styled.span`
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
-`
-
-const ExerciseSummaryCard = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.8rem 0.95rem;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  margin-bottom: 0.75rem;
-`
-
-const ExerciseSummaryLeft = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-`
-
-const ExerciseSummaryTitle = styled.p`
-  margin: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: #6b7280;
-`
-
-const ExerciseSummaryValue = styled.p`
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 900;
-  color: #111827;
-  letter-spacing: -0.02em;
-`
-
-const ExerciseSummaryMeta = styled.span`
-  flex-shrink: 0;
-  font-size: 0.78rem;
-  font-weight: 800;
-  color: #4f46e5;
 `
 
 const DayMarkers = styled.div`
@@ -546,10 +533,27 @@ export default function MainCalendar() {
             </NavButton>
           </MonthNav>
 
-          <SummaryCard>
-            <SummaryLabel>이번 달 총 수입</SummaryLabel>
-            <SummaryValue>{formatKRW(monthTotal)}</SummaryValue>
-          </SummaryCard>
+          <MetricsRow>
+            <MetricBlock>
+              <MetricLabel>이번 달 총 수입</MetricLabel>
+              <MetricValue $accent>{formatKRW(monthTotal)}</MetricValue>
+            </MetricBlock>
+            <MetricDivider aria-hidden />
+            <MetricBlock>
+              <MetricLabel>🏃 이번 달 운동</MetricLabel>
+              <MetricValue>
+                {exerciseMonthSummary.workoutDays}일
+                {exerciseMonthSummary.totalDistanceKm > 0 && (
+                  <>
+                    {' '}
+                    <MetricMeta>
+                      {exerciseMonthSummary.totalDistanceKm.toFixed(1)}km
+                    </MetricMeta>
+                  </>
+                )}
+              </MetricValue>
+            </MetricBlock>
+          </MetricsRow>
 
           <QuickMenu>
             <QuickMenuBtn type="button" onClick={() => setReportOpen(true)}>
@@ -557,20 +561,6 @@ export default function MainCalendar() {
               <QuickLabel>상세보기</QuickLabel>
             </QuickMenuBtn>
           </QuickMenu>
-
-          <ExerciseSummaryCard>
-            <ExerciseSummaryLeft>
-              <ExerciseSummaryTitle>🏃 이번 달 운동</ExerciseSummaryTitle>
-              <ExerciseSummaryValue>
-                {exerciseMonthSummary.workoutDays}일
-              </ExerciseSummaryValue>
-            </ExerciseSummaryLeft>
-            {exerciseMonthSummary.totalDistanceKm > 0 && (
-              <ExerciseSummaryMeta>
-                {exerciseMonthSummary.totalDistanceKm.toFixed(1)}km
-              </ExerciseSummaryMeta>
-            )}
-          </ExerciseSummaryCard>
         </Dashboard>
       </Card>
 
