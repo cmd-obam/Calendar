@@ -199,12 +199,21 @@ const DayMarkers = styled.div`
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
   gap: 1px;
   line-height: 1;
   font-size: 0.58rem;
-  padding-top: 0.1rem;
-  max-width: 55%;
+  padding-top: 0.05rem;
+  max-width: 60%;
   overflow: hidden;
+`
+
+const CellOvertimeStar = styled.span`
+  color: #dc2626;
+  font-size: 0.7rem;
+  line-height: 1;
+  flex-shrink: 0;
+  font-weight: 700;
 `
 
 const CalendarSection = styled.div`
@@ -217,8 +226,28 @@ const CalendarSection = styled.div`
 
 const CalendarToolbar = styled.div`
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   margin-bottom: 0.45rem;
+`
+
+const OvertimeLegend = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--cal-text-dim, #6b7280);
+  letter-spacing: -0.02em;
+`
+
+const OvertimeStar = styled.span`
+  color: #dc2626;
+  font-size: 0.85rem;
+  line-height: 1;
+  flex-shrink: 0;
 `
 
 const AmountToggleBtn = styled.button`
@@ -567,6 +596,10 @@ export default function MainCalendar() {
       <Card>
         <CalendarSection>
           <CalendarToolbar>
+            <OvertimeLegend aria-label="연장근무 표시 안내">
+              <OvertimeStar aria-hidden>★</OvertimeStar>
+              <span>연장근무</span>
+            </OvertimeLegend>
             <AmountToggleBtn
               type="button"
               aria-pressed={showAmounts}
@@ -605,6 +638,7 @@ export default function MainCalendar() {
               const dayEx = dateKey ? exerciseRecords[dateKey] : undefined
               const hasExercise = Boolean(dayEx?.exercises?.length)
               const hasMemo = Boolean(dayEx?.memo?.trim())
+              const hasOvertime = Boolean(log?.isOvertime)
 
               return (
                 <DayCell
@@ -618,7 +652,7 @@ export default function MainCalendar() {
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? ', 수입 있음' : ''}${hasExercise ? ', 운동 있음' : ''}${hasMemo ? ', 메모 있음' : ''}${log && showAmounts ? `, ${formatKRW(log.finalWage)}` : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? ', 수입 있음' : ''}${hasOvertime ? ', 연장근무' : ''}${hasExercise ? ', 운동 있음' : ''}${hasMemo ? ', 메모 있음' : ''}${log && showAmounts ? `, ${formatKRW(log.finalWage)}` : ''}`
                       : '빈 칸'
                   }
                 >
@@ -632,6 +666,9 @@ export default function MainCalendar() {
                           {day}
                         </DayNum>
                         <DayMarkers aria-hidden>
+                          {hasOvertime && (
+                            <CellOvertimeStar title="연장근무">★</CellOvertimeStar>
+                          )}
                           {log && <span title="수입">💰</span>}
                           {hasExercise && <span title="운동">🏃</span>}
                           {hasMemo && <span title="메모">📝</span>}
