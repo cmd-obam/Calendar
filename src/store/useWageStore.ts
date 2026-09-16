@@ -11,15 +11,17 @@ export interface WorkLogEntry {
   amount: number
   /** 인센티브 · 프로모션 수당 */
   incentive: number
-  /** amount + incentive */
+  /** amount + incentive (연장근무 여부와 무관) */
   finalWage: number
+  /** 연장근무 여부 기록 (수당 계산에는 사용하지 않음) */
+  isOvertime: boolean
 }
 
 export type WorkLogsMap = Record<string, WorkLogEntry>
 export type MonthlyGoalsMap = Record<string, number>
 
 const STORAGE_KEY = 'calendar-wage-storage'
-const PERSIST_VERSION = 11
+const PERSIST_VERSION = 12
 
 function toNonNegativeNumber(raw: unknown): number {
   const n = Number(raw)
@@ -53,6 +55,7 @@ export interface WageStoreActions {
     title: string,
     amount: number,
     incentive: number,
+    isOvertime?: boolean,
   ) => void
   /** YYYY-MM-DD 키에 해당하는 급여 기록만 제거 (persist 동기화) */
   deleteWageRecord: (date: string) => void
@@ -83,6 +86,8 @@ type LegacyWorkLog = {
   baseWage?: unknown
   incentive?: unknown
   finalWage?: unknown
+  isOvertime?: unknown
+  overtime?: unknown
 }
 
 type LegacyPersisted = {
@@ -90,6 +95,12 @@ type LegacyPersisted = {
   workLogs?: Record<string, LegacyWorkLog>
   monthlyGoals?: MonthlyGoalsMap
   monthlyGoal?: number
+}
+
+function readOvertimeFlag(entry: LegacyWorkLog): boolean {
+  if (typeof entry.isOvertime === 'boolean') return entry.isOvertime
+  if (typeof entry.overtime === 'boolean') return entry.overtime
+  return false
 }
 
 function migrateWorkLogs(raw: Record<string, LegacyWorkLog> | undefined): WorkLogsMap {
@@ -104,13 +115,14 @@ function migrateWorkLogs(raw: Record<string, LegacyWorkLog> | undefined): WorkLo
       amount,
       incentive,
       finalWage: amount + incentive,
+      isOvertime: readOvertimeFlag(entry),
     }
   }
   return workLogs
 }
 
-/** v10 이하 → v11: 템플릿 제거, workLogs·monthlyGoals 유지 */
-function migrateToV11(input: unknown): WageStorePersisted {
+/** v11 이하 → v12: isOvertime 필드 추가 (기본 false), 급여 계산 변경 없음 */
+function migrateToV12(input: unknown): WageStorePersisted {
   const empty: WageStorePersisted = {
     workLogs: {},
     monthlyGoals: {},
@@ -137,7 +149,7 @@ export const useWageStore = create<WageStore>()(
       setSelectedDate: (date) =>
         set({ selectedDate: date != null ? normalizeDateKey(date) : null }),
 
-      addWorkLog: (date, title, amount, incentive) => {
+      addWorkLog: (date, title, amount, incentive, isOvertime = false) => {
         const amt = toNonNegativeNumber(amount)
         const inc = toNonNegativeNumber(incentive)
         const finalWage = amt + inc
@@ -150,6 +162,7 @@ export const useWageStore = create<WageStore>()(
               amount: amt,
               incentive: inc,
               finalWage,
+              isOvertime: Boolean(isOvertime),
             },
           },
         }))
@@ -183,7 +196,7 @@ export const useWageStore = create<WageStore>()(
       }),
       migrate: (persisted, fromVersion) => {
         if (fromVersion < PERSIST_VERSION) {
-          return migrateToV11(persisted) as WageStoreState
+          return migrateToV12(persisted) as WageStoreState
         }
         return persisted as WageStoreState
       },

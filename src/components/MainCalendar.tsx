@@ -1,31 +1,21 @@
 import styled from '@emotion/styled'
-import {
-  useCallback,
-  useMemo,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import CalendarEntryModal from './CalendarEntryModal'
-import ExpenseHistory from './ExpenseHistory'
 import MonthlyReportModal from './MonthlyReportModal'
 import SettingsModal from './SettingsModal'
 import TopAppBar from './TopAppBar'
 import { sumMonthlyTotalIncome } from '../lib/monthlySettlement'
 import {
-  calcExpenseRatioPercent,
   calcIncomeAchievementRatio,
-  calcMonthlyTargetSavings,
-  calcSavingsProgressRatio,
   clampGaugePercent,
   formatRatioOneDecimal,
   parseWonInput,
   toWonInteger,
 } from '../lib/financeMetrics'
 import { useWageStore } from '../store/useWageStore'
+import { useExerciseStore } from '../store/useExerciseStore'
+import { calculateMonthlyExerciseSummary } from '../data/exerciseTemplates'
 import { getHolidayName } from '../utils/holidays'
-import type { ExpenseItem } from '../lib/expenseHistoryUtils'
-import { sumMonthlyExpenses } from '../lib/expenseHistoryUtils'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const
 
@@ -112,86 +102,165 @@ const NavButton = styled.button`
   }
 `
 
-const StatBlockRow = styled.div`
-  display: flex;
-  align-items: stretch;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-  width: 100%;
-`
-
-const ActionButtonCol = styled.div`
+const SummaryCard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-  min-width: 4.85rem;
-  max-width: 5.25rem;
-  align-self: stretch;
+  gap: 0.55rem;
+  background: linear-gradient(
+    135deg,
+    var(--cal-accent-soft, #eef2ff) 0%,
+    var(--cal-surface, #fff) 72%
+  );
+  border-radius: 16px;
+  padding: 1rem 1.05rem 0.95rem;
+  border: 1px solid var(--cal-border, rgba(99, 102, 241, 0.14));
+  margin-bottom: 0.75rem;
 `
 
-const DetailButton = styled.button`
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  padding: 0.4rem 0.65rem;
-  font-size: 0.68rem;
+const SummaryLabel = styled.p`
+  margin: 0;
+  font-size: 0.78rem;
   font-weight: 800;
+  color: var(--cal-text-dim, #6b7280);
+  letter-spacing: -0.01em;
+`
+
+const SummaryValue = styled.p`
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--cal-accent-strong, #4338ca);
+  line-height: 1.15;
+`
+
+const QuickMenu = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+`
+
+const QuickMenuBtn = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 4.35rem;
+  padding: 0.65rem 0.35rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--cal-accent-strong, #6366f1);
   color: #fff;
   cursor: pointer;
   touch-action: manipulation;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.28);
 
   &:active {
     transform: scale(0.97);
   }
 `
 
-const StatBlock = styled.div`
-  flex: 1;
-  min-width: 0;
+const QuickIcon = styled.span`
+  font-size: 1.15rem;
+  line-height: 1;
+`
+
+const QuickLabel = styled.span`
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+`
+
+const ExerciseSummaryCard = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  margin-bottom: 0.75rem;
+`
+
+const ExerciseSummaryLeft = styled.div`
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  background: linear-gradient(
-    135deg,
-    var(--cal-accent-soft, #eef2ff) 0%,
-    var(--cal-surface, #fff) 100%
-  );
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--cal-border, rgba(99, 102, 241, 0.12));
+  gap: 0.15rem;
+  min-width: 0;
 `
 
-const StatLabel = styled.p`
-  margin: 0 0 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--cal-text-dim, #6b7280);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-`
-
-const StatValue = styled.p`
+const ExerciseSummaryTitle = styled.p`
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 0.78rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--cal-accent-strong, #4338ca);
+  color: #6b7280;
+`
+
+const ExerciseSummaryValue = styled.p`
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.02em;
+`
+
+const ExerciseSummaryMeta = styled.span`
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #4f46e5;
+`
+
+const StatusCard = styled.div`
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  overflow: hidden;
+`
+
+const StatusToggle = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.8rem 0.95rem;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+`
+
+const StatusTitle = styled.span`
+  font-size: 0.88rem;
+  font-weight: 900;
+  color: #111827;
+`
+
+const StatusChevron = styled.span<{ $open: boolean }>`
+  font-size: 1.1rem;
+  color: #9ca3af;
+  transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
+  transition: transform 0.2s ease;
+`
+
+const StatusBody = styled.div`
+  padding: 0 0.95rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 0.75rem;
 `
 
 const GoalRow = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  margin-top: 0.15rem;
 `
 
 const GoalTop = styled.div`
@@ -203,7 +272,7 @@ const GoalTop = styled.div`
 
 const GoalLabel = styled.span`
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--cal-text-dim, #6b7280);
 `
 
@@ -215,7 +284,7 @@ const GoalInputWrap = styled.div`
 
 const GoalInput = styled.input`
   width: 7.5rem;
-  max-width: 45vw;
+  max-width: 40vw;
   padding: 0.45rem 0.55rem;
   font-size: 0.9rem;
   font-weight: 600;
@@ -258,28 +327,12 @@ const ProgressMeta = styled.div`
   color: var(--cal-text-dim, #6b7280);
 `
 
-const FinanceGaugeSection = styled.div`
+const DayMarkers = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--cal-border, #f3f4f6);
-`
-
-const GaugeBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-`
-
-const GaugeLabel = styled.p`
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  line-height: 1.35;
-  color: var(--cal-text-dim, #6b7280);
-  word-break: keep-all;
+  flex-wrap: wrap;
+  gap: 1px;
+  line-height: 1;
+  font-size: 0.62rem;
 `
 
 const CalendarSection = styled.div`
@@ -491,15 +544,7 @@ const LogWageUnit = styled.span`
   line-height: inherit;
 `
 
-export interface MainCalendarProps {
-  expenses: ExpenseItem[]
-  setExpenses: Dispatch<SetStateAction<ExpenseItem[]>>
-}
-
-export default function MainCalendar({
-  expenses,
-  setExpenses,
-}: MainCalendarProps) {
+export default function MainCalendar() {
   const workLogs = useWageStore((s) => s.workLogs)
   const monthlyGoals = useWageStore((s) => s.monthlyGoals)
   const selectedDate = useWageStore((s) => s.selectedDate)
@@ -510,11 +555,9 @@ export default function MainCalendar({
   const [reportOpen, setReportOpen] = useState(false)
   const [showAmounts, setShowAmounts] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
 
-  const [currentSavings] = useState(0)
-  const [savingsTargetAmount] = useState(0)
-  const [savingsTargetMonths] = useState(0)
+  const exerciseRecords = useExerciseStore((s) => s.records)
 
   const year = cursor.getFullYear()
   const monthIndex = cursor.getMonth()
@@ -553,58 +596,6 @@ export default function MainCalendar({
     [incomeAchievementRatio],
   )
 
-  const totalExpenseWon = useMemo(
-    () => sumMonthlyExpenses(expenses, year, monthIndex),
-    [expenses, year, monthIndex],
-  )
-  const currentSavingsWon = useMemo(
-    () => toWonInteger(currentSavings),
-    [currentSavings],
-  )
-  const savingsTargetAmountWon = useMemo(
-    () => toWonInteger(savingsTargetAmount),
-    [savingsTargetAmount],
-  )
-  const savingsTargetMonthsSafe = useMemo(() => {
-    const months = Math.floor(savingsTargetMonths)
-    return Number.isFinite(months) && months > 0 ? months : 0
-  }, [savingsTargetMonths])
-
-  const expenseRatio = useMemo(
-    () => calcExpenseRatioPercent(totalExpenseWon, totalIncome),
-    [totalExpenseWon, totalIncome],
-  )
-  const expenseRatioLabel = useMemo(
-    () => formatRatioOneDecimal(expenseRatio),
-    [expenseRatio],
-  )
-  const expenseBarWidth = useMemo(
-    () => clampGaugePercent(expenseRatio),
-    [expenseRatio],
-  )
-
-  const monthlyTargetSavings = useMemo(
-    () =>
-      calcMonthlyTargetSavings(
-        savingsTargetAmountWon,
-        savingsTargetMonthsSafe,
-      ),
-    [savingsTargetAmountWon, savingsTargetMonthsSafe],
-  )
-  const savingsProgressRatio = useMemo(
-    () =>
-      calcSavingsProgressRatio(currentSavingsWon, monthlyTargetSavings),
-    [currentSavingsWon, monthlyTargetSavings],
-  )
-  const savingsProgressLabel = useMemo(
-    () => formatRatioOneDecimal(savingsProgressRatio),
-    [savingsProgressRatio],
-  )
-  const savingsBarWidth = useMemo(
-    () => clampGaugePercent(savingsProgressRatio),
-    [savingsProgressRatio],
-  )
-
   const today = useMemo(() => new Date(), [])
   const todayKey = toDateKey(
     today.getFullYear(),
@@ -624,14 +615,10 @@ export default function MainCalendar({
     return cells
   }, [year, monthIndex])
 
-  const expenseDatesInMonth = useMemo(() => {
-    const ym = `${year}-${pad2(monthIndex + 1)}`
-    const set = new Set<string>()
-    for (const item of expenses) {
-      if (item.date.startsWith(ym)) set.add(item.date)
-    }
-    return set
-  }, [expenses, year, monthIndex])
+  const exerciseMonthSummary = useMemo(
+    () => calculateMonthlyExerciseSummary(exerciseRecords, year, monthIndex),
+    [exerciseRecords, year, monthIndex],
+  )
 
   const goPrevMonth = useCallback(() => {
     setCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))
@@ -645,7 +632,6 @@ export default function MainCalendar({
     (day: number | null) => {
       if (day == null) return
       const key = toDateKey(year, monthIndex, day)
-      console.log('[MainCalendar] date click →', key)
       setSelectedDate(key)
     },
     [year, monthIndex, setSelectedDate],
@@ -657,18 +643,6 @@ export default function MainCalendar({
     },
     [setMonthlyGoal, yearMonthKey],
   )
-
-  if (expenseHistoryOpen) {
-    return (
-      <AppFrame>
-        <ExpenseHistory
-          expenses={expenses}
-          setExpenses={setExpenses}
-          onBack={() => setExpenseHistoryOpen(false)}
-        />
-      </AppFrame>
-    )
-  }
 
   return (
     <AppFrame>
@@ -694,123 +668,89 @@ export default function MainCalendar({
             </NavButton>
           </MonthNav>
 
-          <StatBlockRow className="flex w-full items-stretch gap-x-3">
-            <StatBlock className="flex min-h-0 flex-1 flex-col justify-center">
-              <StatLabel>이번 달 총 수입</StatLabel>
-              <StatValue>{formatKRW(monthTotal)}</StatValue>
-            </StatBlock>
-            <ActionButtonCol className="flex flex-1 flex-col gap-y-2 self-stretch">
-              <DetailButton
-                type="button"
-                className="flex-1"
-                onClick={() => setReportOpen(true)}
-              >
-                상세 보기
-              </DetailButton>
-              <DetailButton
-                type="button"
-                className="flex-1"
-                onClick={() => setExpenseHistoryOpen(true)}
-              >
-                소비 내역
-              </DetailButton>
-              <DetailButton
-                type="button"
-                className="flex-1"
-                onClick={() =>
-                  window.alert('목표 저축 설정 모달은 준비 중입니다.')
-                }
-              >
-                목표 저축
-              </DetailButton>
-            </ActionButtonCol>
-          </StatBlockRow>
+          <SummaryCard>
+            <SummaryLabel>이번 달 총 수입</SummaryLabel>
+            <SummaryValue>{formatKRW(monthTotal)}</SummaryValue>
+          </SummaryCard>
 
-          <GoalRow>
-            <GoalTop>
-              <GoalLabel>월별 목표</GoalLabel>
-              <GoalInputWrap>
-                <GoalInput
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  aria-label="월 목표 금액"
-                  value={monthlyGoal === 0 ? '' : String(monthlyGoal)}
-                  placeholder="0"
-                  onChange={(e) => handleGoalChange(e.target.value)}
-                />
-                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>원</span>
-              </GoalInputWrap>
-            </GoalTop>
-            <ProgressTrack
-              role="progressbar"
-              aria-valuenow={incomeAchievementBarWidth}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+          <QuickMenu>
+            <QuickMenuBtn type="button" onClick={() => setReportOpen(true)}>
+              <QuickIcon aria-hidden>📊</QuickIcon>
+              <QuickLabel>상세보기</QuickLabel>
+            </QuickMenuBtn>
+          </QuickMenu>
+
+          <ExerciseSummaryCard>
+            <ExerciseSummaryLeft>
+              <ExerciseSummaryTitle>🏃 이번 달 운동</ExerciseSummaryTitle>
+              <ExerciseSummaryValue>
+                {exerciseMonthSummary.workoutDays}일
+              </ExerciseSummaryValue>
+            </ExerciseSummaryLeft>
+            {exerciseMonthSummary.totalDistanceKm > 0 && (
+              <ExerciseSummaryMeta>
+                {exerciseMonthSummary.totalDistanceKm.toFixed(1)}km
+              </ExerciseSummaryMeta>
+            )}
+          </ExerciseSummaryCard>
+
+          <StatusCard>
+            <StatusToggle
+              type="button"
+              aria-expanded={statusOpen}
+              onClick={() => setStatusOpen((v) => !v)}
             >
-              <ProgressFill pct={incomeAchievementBarWidth} />
-            </ProgressTrack>
-            <ProgressMeta>
-              <span>
-                달성률{' '}
-                {monthlyGoal > 0
-                  ? `${incomeAchievementLabel}%`
-                  : '목표 미설정'}
-              </span>
-              <span>
-                {monthlyGoal > 0
-                  ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
-                  : '—'}
-              </span>
-            </ProgressMeta>
-          </GoalRow>
-
-          <FinanceGaugeSection>
-            <GaugeBlock>
-              <GaugeLabel>
-                지출 비율: {formatKRW(totalExpenseWon)} /{' '}
-                {formatKRW(totalIncome)} ({expenseRatioLabel}%)
-              </GaugeLabel>
-              <div
-                className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100"
-                role="progressbar"
-                aria-valuenow={expenseBarWidth}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`지출 비율 ${expenseRatioLabel}%`}
-              >
-                <div
-                  className="h-full rounded-full bg-red-500 transition-all duration-500 ease-out"
-                  style={{ width: `${expenseBarWidth}%` }}
-                />
-              </div>
-            </GaugeBlock>
-
-            <GaugeBlock>
-              <GaugeLabel>
-                저축 달성률: {formatKRW(currentSavingsWon)} /{' '}
-                {formatKRW(monthlyTargetSavings)} (
-                {monthlyTargetSavings > 0
-                  ? `${savingsProgressLabel}%`
-                  : '0.0%'}
-                )
-              </GaugeLabel>
-              <div
-                className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100"
-                role="progressbar"
-                aria-valuenow={savingsBarWidth}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`저축 달성률 ${savingsProgressLabel}%`}
-              >
-                <div
-                  className="h-full rounded-full bg-green-500 transition-all duration-500 ease-out"
-                  style={{ width: `${savingsBarWidth}%` }}
-                />
-              </div>
-            </GaugeBlock>
-          </FinanceGaugeSection>
+              <StatusTitle>월간 현황</StatusTitle>
+              <StatusChevron $open={statusOpen} aria-hidden>
+                ›
+              </StatusChevron>
+            </StatusToggle>
+            {statusOpen && (
+              <StatusBody>
+                <GoalRow>
+                  <GoalTop>
+                    <GoalLabel>월별 목표</GoalLabel>
+                    <GoalInputWrap>
+                      <GoalInput
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        aria-label="월 목표 금액"
+                        value={monthlyGoal === 0 ? '' : String(monthlyGoal)}
+                        placeholder="0"
+                        onChange={(e) => handleGoalChange(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                        원
+                      </span>
+                    </GoalInputWrap>
+                  </GoalTop>
+                  <ProgressTrack
+                    role="progressbar"
+                    aria-valuenow={incomeAchievementBarWidth}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+                  >
+                    <ProgressFill pct={incomeAchievementBarWidth} />
+                  </ProgressTrack>
+                  <ProgressMeta>
+                    <span>
+                      목표 달성률{' '}
+                      {monthlyGoal > 0
+                        ? `${incomeAchievementLabel}%`
+                        : '미설정'}
+                    </span>
+                    <span>
+                      {monthlyGoal > 0
+                        ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
+                        : '—'}
+                    </span>
+                  </ProgressMeta>
+                </GoalRow>
+              </StatusBody>
+            )}
+          </StatusCard>
         </Dashboard>
       </Card>
 
@@ -852,8 +792,9 @@ export default function MainCalendar({
               const holidayName =
                 dateKey != null ? getHolidayName(dateKey) : undefined
               const isHoliday = holidayName != null
-              const hasExpense =
-                dateKey != null && expenseDatesInMonth.has(dateKey)
+              const dayEx = dateKey ? exerciseRecords[dateKey] : undefined
+              const hasExercise = Boolean(dayEx?.exercises?.length)
+              const hasMemo = Boolean(dayEx?.memo?.trim())
 
               return (
                 <DayCell
@@ -868,7 +809,7 @@ export default function MainCalendar({
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${hasExpense ? ', 소비 있음' : ''}${log ? `, ${log.title}${showAmounts ? `, ${formatKRW(log.finalWage)}` : ', 금액 숨김'}` : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? ', 수입 있음' : ''}${hasExercise ? ', 운동 있음' : ''}${hasMemo ? ', 메모 있음' : ''}${log && showAmounts ? `, ${formatKRW(log.finalWage)}` : ''}`
                       : '빈 칸'
                   }
                 >
@@ -881,11 +822,11 @@ export default function MainCalendar({
                         >
                           {day}
                         </DayNum>
-                        {hasExpense && (
-                          <span className="mr-1.5 ml-1 inline-flex flex-shrink-0 items-center justify-center rounded-full bg-red-100 px-1.5 py-[2px] text-[10px] font-medium leading-none text-red-500">
-                            소비
-                          </span>
-                        )}
+                        <DayMarkers aria-hidden>
+                          {log && <span title="수입">💰</span>}
+                          {hasExercise && <span title="운동">🏃</span>}
+                          {hasMemo && <span title="메모">📝</span>}
+                        </DayMarkers>
                       </div>
                       {log &&
                         (showAmounts ? (
@@ -928,8 +869,6 @@ export default function MainCalendar({
       <CalendarEntryModal
         open={selectedDate != null}
         onClose={() => setSelectedDate(null)}
-        expenses={expenses}
-        setExpenses={setExpenses}
       />
 
       <MonthlyReportModal

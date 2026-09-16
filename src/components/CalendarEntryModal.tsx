@@ -1,26 +1,21 @@
 import styled from '@emotion/styled'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import ExerciseEntryForm from './ExerciseEntryForm'
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react'
-import ExpenseEntryForm, { type ExpenseEntryDraft } from './ExpenseEntryForm'
-import {
-  createExpenseId,
-  getExpensesForDate,
-  toExpenseAmount,
-  type ExpenseItem,
-} from '../lib/expenseHistoryUtils'
-import {
-  computeFinalDailyWage,
-  useWageStore,
-} from '../store/useWageStore'
+  exerciseTemplates,
+  formatExerciseSummary,
+  type ExerciseItem,
+  type ExerciseTemplate,
+} from '../data/exerciseTemplates'
+import { useWageStore } from '../store/useWageStore'
+import { useExerciseStore } from '../store/useExerciseStore'
 import { getHolidayName } from '../utils/holidays'
 
-type EntryTab = 'wage' | 'expense'
+type ModalView =
+  | 'overview'
+  | 'wage'
+  | 'exercise-pick'
+  | 'exercise-form'
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -38,6 +33,14 @@ function formatKRW(n: number): string {
 function parseMoneyInput(raw: string): number {
   const v = Number(raw.replace(/,/g, '').trim())
   return Number.isFinite(v) && v > 0 ? v : 0
+}
+
+/** 0 이상 허용 (인센티브 비움 = 0) */
+function parseMoneyInputAllowZero(raw: string): number {
+  const trimmed = raw.replace(/,/g, '').trim()
+  if (trimmed === '') return 0
+  const v = Number(trimmed)
+  return Number.isFinite(v) && v >= 0 ? v : 0
 }
 
 function todayDateKey(): string {
@@ -124,14 +127,9 @@ const HeaderRow = styled.div`
   gap: 0.75rem;
 `
 
-const Scroll = styled.div`
+const HeaderText = styled.div`
   flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0.75rem 1.1rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  min-width: 0;
 `
 
 const DateHeadline = styled.h2`
@@ -143,43 +141,11 @@ const DateHeadline = styled.h2`
 `
 
 const Hint = styled.p`
-  margin: 0;
-  font-size: 0.68rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--cal-text-dim, #6b7280);
   line-height: 1.4;
-`
-
-const TabBar = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-`
-
-const TabBtn = styled.button<{ $active: boolean }>`
-  flex: 1;
-  min-width: 0;
-  padding: 0.62rem 0.45rem;
-  font-size: 0.74rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  border-radius: 12px;
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? 'transparent' : 'var(--cal-border, #e5e7eb)'};
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #4f46e5 0%, var(--cal-accent-mid, #818cf8) 100%)'
-      : 'var(--cal-muted, #f3f4f6)'};
-  color: ${({ $active }) => ($active ? '#fff' : 'var(--cal-text-dim, #6b7280)')};
-  cursor: pointer;
-  touch-action: manipulation;
-  box-shadow: ${({ $active }) =>
-    $active ? '0 6px 16px rgba(79, 70, 229, 0.28)' : 'none'};
-
-  &:active {
-    transform: scale(0.98);
-  }
 `
 
 const CloseBtn = styled.button`
@@ -207,9 +173,95 @@ const CloseBtn = styled.button`
   }
 `
 
-const HeaderText = styled.div`
+const Scroll = styled.div`
   flex: 1;
-  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+`
+
+const SectionCard = styled.section`
+  border-radius: 16px;
+  border: 1px solid var(--cal-border, #e5e7eb);
+  background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+  padding: 0.9rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+`
+
+const SectionHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`
+
+const SectionTitle = styled.h3`
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+`
+
+const EmptyText = styled.p`
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #9ca3af;
+`
+
+const AddBtn = styled.button`
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 2px dashed #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.88rem;
+  font-weight: 900;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:active {
+    transform: scale(0.99);
+    background: #e0e7ff;
+  }
+`
+
+const GhostBtn = styled.button`
+  border: none;
+  background: transparent;
+  color: #4f46e5;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+`
+
+const DangerBtn = styled.button`
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+`
+
+const BackBtn = styled.button`
+  align-self: flex-start;
+  border: none;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 0.78rem;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
 `
 
 const FormPanel = styled.div`
@@ -255,6 +307,55 @@ const Input = styled.input`
     color: var(--cal-text-dim, #9ca3af);
     font-weight: 600;
   }
+
+  &:disabled {
+    background: #f3f4f6;
+    color: #4338ca;
+    cursor: default;
+  }
+`
+
+const AutoHint = styled.span`
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #9ca3af;
+`
+
+const OvertimeToggle = styled.button<{ $on: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.75rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid
+    ${({ $on }) => ($on ? 'rgba(79, 70, 229, 0.35)' : '#e5e7eb')};
+  background: ${({ $on }) => ($on ? '#eef2ff' : '#fff')};
+  cursor: pointer;
+  text-align: left;
+`
+
+const OvertimeLabel = styled.span`
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #111827;
+`
+
+const CheckBox = styled.span<{ $on: boolean }>`
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 6px;
+  border: 2px solid ${({ $on }) => ($on ? '#4f46e5' : '#d1d5db')};
+  background: ${({ $on }) => ($on ? '#4f46e5' : '#fff')};
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+  flex-shrink: 0;
 `
 
 const StickyBottom = styled.div`
@@ -268,23 +369,13 @@ const StickyBottom = styled.div`
   gap: 0.75rem;
 `
 
-const FinalLine = styled.div`
-  text-align: center;
-  padding: 0.35rem 0;
-`
-
 const FinalCombined = styled.p`
   margin: 0;
-  font-size: 1.38rem;
+  text-align: center;
+  font-size: 1.28rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   color: var(--cal-accent-strong, #4338ca);
-  line-height: 1.4;
-`
-
-const FinalStrong = styled.strong`
-  font-weight: 900;
-  color: var(--cal-text, #111827);
 `
 
 const ActionRow = styled.div`
@@ -299,18 +390,12 @@ const DeleteRecordBtn = styled.button`
   padding: 1rem 0.9rem;
   font-size: 0.95rem;
   font-weight: 900;
-  letter-spacing: -0.02em;
   border: none;
   border-radius: 16px;
   background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
   color: #fff;
   cursor: pointer;
-  touch-action: manipulation;
   box-shadow: 0 10px 24px rgba(220, 38, 38, 0.38);
-
-  &:active {
-    transform: scale(0.99);
-  }
 `
 
 const SubmitBtn = styled.button`
@@ -319,17 +404,11 @@ const SubmitBtn = styled.button`
   padding: 1rem 1.25rem;
   font-size: 1.05rem;
   font-weight: 900;
-  letter-spacing: -0.02em;
   border: none;
   border-radius: 16px;
-  background: linear-gradient(
-    135deg,
-    #4f46e5 0%,
-    var(--cal-accent-mid, #818cf8) 100%
-  );
+  background: linear-gradient(135deg, #4f46e5 0%, #818cf8 100%);
   color: #fff;
   cursor: pointer;
-  touch-action: manipulation;
   box-shadow: 0 10px 28px rgba(79, 70, 229, 0.38);
 
   &:disabled {
@@ -337,29 +416,119 @@ const SubmitBtn = styled.button`
     cursor: not-allowed;
     box-shadow: none;
   }
+`
 
-  &:active:not(:disabled) {
-    transform: scale(0.99);
+const DetailGrid = styled.div`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+`
+
+const DetailKey = styled.span`
+  color: #6b7280;
+  font-weight: 700;
+`
+
+const DetailVal = styled.span`
+  text-align: right;
+  font-weight: 800;
+  color: #111827;
+`
+
+const ListItem = styled.li`
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+`
+
+const ListMeta = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`
+
+const TemplateList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`
+
+const TemplateBtn = styled.button`
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: left;
+  padding: 0.75rem 0.95rem;
+  cursor: pointer;
+
+  &:active {
+    background: #eef2ff;
   }
+`
+
+const MemoArea = styled.textarea`
+  width: 100%;
+  min-height: 88px;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+
+  &:focus {
+    outline: 3px solid rgba(99, 102, 241, 0.3);
+  }
+`
+
+const MemoSaveBtn = styled.button`
+  align-self: flex-end;
+  min-height: 40px;
+  padding: 0.5rem 0.9rem;
+  border: none;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
 `
 
 export interface CalendarEntryModalProps {
   open: boolean
   onClose: () => void
-  expenses: ExpenseItem[]
-  setExpenses: Dispatch<SetStateAction<ExpenseItem[]>>
 }
 
 export default function CalendarEntryModal({
   open,
   onClose,
-  expenses,
-  setExpenses,
 }: CalendarEntryModalProps) {
   const workLogs = useWageStore((s) => s.workLogs)
   const selectedDate = useWageStore((s) => s.selectedDate)
   const addWorkLog = useWageStore((s) => s.addWorkLog)
   const deleteWageRecord = useWageStore((s) => s.deleteWageRecord)
+
+  const records = useExerciseStore((s) => s.records)
+  const addExercise = useExerciseStore((s) => s.addExercise)
+  const updateExercise = useExerciseStore((s) => s.updateExercise)
+  const deleteExercise = useExerciseStore((s) => s.deleteExercise)
+  const toggleExerciseCompleted = useExerciseStore(
+    (s) => s.toggleExerciseCompleted,
+  )
+  const updateMemo = useExerciseStore((s) => s.updateMemo)
 
   const existingRecord = useMemo(
     () => (selectedDate ? workLogs[selectedDate] : undefined),
@@ -371,50 +540,58 @@ export default function CalendarEntryModal({
   )
   const hasExistingRecord = existingRecord != null
 
-  const [sheetVisible, setSheetVisible] = useState(false)
-  const [activeTab, setActiveTab] = useState<EntryTab>('wage')
-  const [isAddingExpense, setIsAddingExpense] = useState(false)
-  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null)
-  const [companyName, setCompanyName] = useState('')
-  const [salaryRaw, setSalaryRaw] = useState('')
-  const [incentiveRaw, setIncentiveRaw] = useState('')
-
-  const dayExpenses = useMemo(
-    () => (selectedDate ? getExpensesForDate(expenses, selectedDate) : []),
-    [expenses, selectedDate],
+  const dayExercise = useMemo(
+    () =>
+      selectedDate
+        ? (records[selectedDate] ?? { exercises: [], memo: '' })
+        : { exercises: [], memo: '' },
+    [records, selectedDate],
   )
-  const hasDayExpenses = dayExpenses.length > 0
-  const showExpenseForm =
-    !hasDayExpenses || isAddingExpense || editingExpense != null
 
-  const wageTabLabel = hasExistingRecord ? '급여 기록 수정' : '급여 입력'
-  const expenseTabLabel = hasDayExpenses ? '소비내역 확인' : '소비내역 입력'
+  const [sheetVisible, setSheetVisible] = useState(false)
+  const [view, setView] = useState<ModalView>('overview')
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<ExerciseTemplate | null>(null)
+  const [editingExercise, setEditingExercise] = useState<ExerciseItem | null>(
+    null,
+  )
+  const [companyName, setCompanyName] = useState('')
+  const [totalRaw, setTotalRaw] = useState('')
+  const [incentiveRaw, setIncentiveRaw] = useState('')
+  const [isOvertime, setIsOvertime] = useState(false)
+  const [memoDraft, setMemoDraft] = useState('')
 
-  const resetForm = useCallback(() => {
+  const resetWageForm = useCallback(() => {
     setCompanyName('')
-    setSalaryRaw('')
+    setTotalRaw('')
     setIncentiveRaw('')
+    setIsOvertime(false)
   }, [])
 
-  /** 선택된 날짜·기록 여부에 따라 입력 폼 동기화 */
+  const resetNav = useCallback(() => {
+    setView('overview')
+    setSelectedTemplate(null)
+    setEditingExercise(null)
+  }, [])
+
   useEffect(() => {
     if (!open || !selectedDate) return
     const record = workLogs[selectedDate]
     if (record) {
       setCompanyName(record.title)
-      setSalaryRaw(record.amount > 0 ? String(record.amount) : '')
+      const total =
+        record.finalWage > 0
+          ? record.finalWage
+          : record.amount + record.incentive
+      setTotalRaw(total > 0 ? String(total) : '')
       setIncentiveRaw(record.incentive > 0 ? String(record.incentive) : '')
+      setIsOvertime(Boolean(record.isOvertime))
     } else {
-      resetForm()
+      resetWageForm()
     }
-  }, [open, selectedDate, workLogs, resetForm])
-
-  useEffect(() => {
-    if (!open || !selectedDate) return
-    setActiveTab('wage')
-    setIsAddingExpense(false)
-    setEditingExpense(null)
-  }, [open, selectedDate])
+    setMemoDraft(records[selectedDate]?.memo ?? '')
+    resetNav()
+  }, [open, selectedDate, workLogs, records, resetWageForm, resetNav])
 
   useEffect(() => {
     if (!open) {
@@ -430,56 +607,48 @@ export default function CalendarEntryModal({
     }
   }, [open])
 
-  const salaryNum = useMemo(() => parseMoneyInput(salaryRaw), [salaryRaw])
+  const totalNum = useMemo(() => parseMoneyInput(totalRaw), [totalRaw])
   const incentiveNum = useMemo(
-    () => parseMoneyInput(incentiveRaw),
+    () => parseMoneyInputAllowZero(incentiveRaw),
     [incentiveRaw],
   )
-
-  const finalPreview = useMemo(
-    () => computeFinalDailyWage(salaryNum, incentiveNum),
-    [salaryNum, incentiveNum],
+  const salaryNum = useMemo(
+    () => Math.max(0, totalNum - incentiveNum),
+    [totalNum, incentiveNum],
   )
-
   const isToday = selectedDate != null && selectedDate === todayDateKey()
   const canSubmit =
     selectedDate != null &&
     companyName.trim().length > 0 &&
-    salaryNum > 0
+    totalNum > 0 &&
+    incentiveNum <= totalNum
+
+  const closeImmediate = useCallback(() => {
+    resetWageForm()
+    resetNav()
+    setSheetVisible(false)
+    onClose()
+  }, [onClose, resetWageForm, resetNav])
 
   const closeAnimated = useCallback(() => {
     setSheetVisible(false)
     window.setTimeout(() => {
       onClose()
-      resetForm()
-      setActiveTab('wage')
-      setIsAddingExpense(false)
-      setEditingExpense(null)
+      resetWageForm()
+      resetNav()
     }, 320)
-  }, [onClose, resetForm])
+  }, [onClose, resetWageForm, resetNav])
 
-  const closeImmediate = useCallback(() => {
-    resetForm()
-    setSheetVisible(false)
-    setActiveTab('wage')
-    setIsAddingExpense(false)
-    setEditingExpense(null)
-    onClose()
-  }, [onClose, resetForm])
-
-  const handleBackdrop = useCallback(() => {
-    closeImmediate()
-  }, [closeImmediate])
-
-  const handleSubmit = useCallback(() => {
+  const handleSubmitWage = useCallback(() => {
     if (!selectedDate || !canSubmit) return
     addWorkLog(
       selectedDate,
       companyName.trim(),
       salaryNum,
       incentiveNum,
+      isOvertime,
     )
-    closeAnimated()
+    setView('overview')
   }, [
     selectedDate,
     canSubmit,
@@ -487,92 +656,52 @@ export default function CalendarEntryModal({
     companyName,
     salaryNum,
     incentiveNum,
-    closeAnimated,
+    isOvertime,
   ])
 
-  const handleDeleteRecord = useCallback(() => {
+  const handleDeleteWage = useCallback(() => {
     if (!selectedDate || !hasExistingRecord) return
-    if (
-      !window.confirm('이 날의 근무 기록을 정말 삭제하시겠습니까?')
-    ) {
-      return
-    }
+    if (!window.confirm('이 날의 근무 기록을 정말 삭제하시겠습니까?')) return
     deleteWageRecord(selectedDate)
-    resetForm()
-  }, [selectedDate, hasExistingRecord, deleteWageRecord, resetForm])
+    resetWageForm()
+    setView('overview')
+  }, [selectedDate, hasExistingRecord, deleteWageRecord, resetWageForm])
 
-  const handleSaveExpense = useCallback(
-    (entry: ExpenseEntryDraft) => {
+  const handleExerciseSubmit = useCallback(
+    (payload: Parameters<typeof addExercise>[1]) => {
       if (!selectedDate) return
-      if (editingExpense) {
-        setExpenses((prev) =>
-          prev.map((item) =>
-            item.id === editingExpense.id
-              ? {
-                  ...item,
-                  date: selectedDate,
-                  category: entry.category.trim(),
-                  content: entry.content.trim(),
-                  amount: toExpenseAmount(entry.amount),
-                }
-              : item,
-          ),
-        )
+      if (editingExercise) {
+        updateExercise(selectedDate, editingExercise.id, payload)
       } else {
-        setExpenses((prev) => [
-          ...prev,
-          {
-            id: createExpenseId(),
-            date: selectedDate,
-            category: entry.category.trim(),
-            content: entry.content.trim(),
-            amount: toExpenseAmount(entry.amount),
-          },
-        ])
+        addExercise(selectedDate, payload)
       }
-      setIsAddingExpense(false)
-      setEditingExpense(null)
+      setEditingExercise(null)
+      setSelectedTemplate(null)
+      setView('overview')
     },
-    [selectedDate, setExpenses, editingExpense],
+    [selectedDate, editingExercise, addExercise, updateExercise],
   )
 
-  const handleDeleteExpense = useCallback(
-    (id: string) => {
-      if (!window.confirm('이 소비 내역을 삭제하시겠습니까?')) return
-      setExpenses((prev) => prev.filter((item) => item.id !== id))
-      if (editingExpense?.id === id) {
-        setEditingExpense(null)
-        setIsAddingExpense(false)
-      }
-    },
-    [setExpenses, editingExpense],
-  )
+  const handleSaveMemo = useCallback(() => {
+    if (!selectedDate) return
+    updateMemo(selectedDate, memoDraft)
+  }, [selectedDate, memoDraft, updateMemo])
 
-  const handleEditExpense = useCallback((item: ExpenseItem) => {
-    setEditingExpense(item)
-    setIsAddingExpense(false)
-  }, [])
-
-  const handleCancelExpenseForm = useCallback(() => {
-    setIsAddingExpense(false)
-    setEditingExpense(null)
-  }, [])
-
-  const handleStartAddExpense = useCallback(() => {
-    setEditingExpense(null)
-    setIsAddingExpense(true)
-  }, [])
+  const viewHint =
+    view === 'overview'
+      ? '수입 · 운동 · 메모를 한곳에서 관리'
+      : view === 'wage'
+        ? '근무 정보 및 급여 입력'
+        : view === 'exercise-pick'
+          ? '운동 종류 선택'
+          : '운동 기록 입력'
 
   if (!open && !sheetVisible) return null
 
   return (
     <Root $open={open}>
-      <Backdrop type="button" aria-label="닫기" onClick={handleBackdrop} />
-      <SheetWrap
-        onClick={(e) => {
-          e.stopPropagation()
-        }}
-      >
+      <Backdrop type="button" aria-label="닫기" onClick={closeImmediate} />
+      <SheetWrap onClick={(e) => e.stopPropagation()}>
         <Sheet
           $visible={sheetVisible && open}
           role="dialog"
@@ -597,43 +726,11 @@ export default function CalendarEntryModal({
                       </span>
                     )}
                   </div>
-                  <Hint>
-                    {activeTab === 'wage'
-                      ? '근무 정보 및 급여 입력'
-                      : showExpenseForm
-                        ? '소비 내역을 입력하세요'
-                        : '등록된 소비 내역을 확인하세요'}
-                  </Hint>
-                  <TabBar role="tablist" aria-label="일정 입력 탭">
-                    <TabBtn
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'wage'}
-                      $active={activeTab === 'wage'}
-                      onClick={() => setActiveTab('wage')}
-                    >
-                      {wageTabLabel}
-                    </TabBtn>
-                    <TabBtn
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'expense'}
-                      $active={activeTab === 'expense'}
-                      onClick={() => {
-                        setActiveTab('expense')
-                        if (hasDayExpenses) {
-                          setIsAddingExpense(false)
-                          setEditingExpense(null)
-                        }
-                      }}
-                    >
-                      {expenseTabLabel}
-                    </TabBtn>
-                  </TabBar>
+                  <Hint>{viewHint}</Hint>
                 </HeaderText>
                 <CloseBtn
                   type="button"
-                  aria-label="닫기 (저장 안 함)"
+                  aria-label="닫기"
                   onClick={closeImmediate}
                 >
                   ×
@@ -643,146 +740,281 @@ export default function CalendarEntryModal({
           )}
 
           <Scroll>
-            {activeTab === 'wage' ? (
-              <FormPanel>
-                <FieldGroup>
-                  <FieldLabel>회사명 (또는 근무지)</FieldLabel>
-                  <Input
-                    placeholder="예: 쿠팡, 배달의민족 등"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    enterKeyHint="next"
+            {view === 'overview' && selectedDate && (
+              <>
+                <SectionCard>
+                  <SectionHead>
+                    <SectionTitle>💰 수입</SectionTitle>
+                  </SectionHead>
+                  {hasExistingRecord && existingRecord ? (
+                    <DetailGrid>
+                      <DetailKey>근무지</DetailKey>
+                      <DetailVal>{existingRecord.title}</DetailVal>
+                      <DetailKey>기본급</DetailKey>
+                      <DetailVal>{formatKRW(existingRecord.amount)}</DetailVal>
+                      <DetailKey>인센티브</DetailKey>
+                      <DetailVal>
+                        {formatKRW(existingRecord.incentive)}
+                      </DetailVal>
+                      <DetailKey>연장근무</DetailKey>
+                      <DetailVal>
+                        {existingRecord.isOvertime ? '✓' : '—'}
+                      </DetailVal>
+                      <DetailKey>총 금액</DetailKey>
+                      <DetailVal>
+                        {formatKRW(existingRecord.finalWage)}
+                      </DetailVal>
+                    </DetailGrid>
+                  ) : (
+                    <EmptyText>아직 기록된 수입이 없습니다.</EmptyText>
+                  )}
+                  {hasExistingRecord ? (
+                    <AddBtn type="button" onClick={() => setView('wage')}>
+                      [수입 수정]
+                    </AddBtn>
+                  ) : (
+                    <AddBtn type="button" onClick={() => setView('wage')}>
+                      [수입 추가]
+                    </AddBtn>
+                  )}
+                </SectionCard>
+
+                <SectionCard>
+                  <SectionHead>
+                    <SectionTitle>🏃 운동</SectionTitle>
+                  </SectionHead>
+                  {dayExercise.exercises.length > 0 ? (
+                    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                      {dayExercise.exercises.map((ex) => (
+                        <ListItem key={ex.id}>
+                          <ListMeta>
+                            <span className="text-sm font-bold text-gray-900">
+                              {ex.completed ? '✓ ' : ''}
+                              {ex.name}
+                            </span>
+                            <span className="text-xs font-bold text-indigo-700">
+                              {formatExerciseSummary(ex)}
+                            </span>
+                          </ListMeta>
+                          <div className="flex justify-end gap-1">
+                            <GhostBtn
+                              type="button"
+                              onClick={() =>
+                                toggleExerciseCompleted(selectedDate, ex.id)
+                              }
+                            >
+                              {ex.completed ? '미완료' : '완료'}
+                            </GhostBtn>
+                            <GhostBtn
+                              type="button"
+                              onClick={() => {
+                                setEditingExercise(ex)
+                                setSelectedTemplate(null)
+                                setView('exercise-form')
+                              }}
+                            >
+                              수정
+                            </GhostBtn>
+                            <DangerBtn
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    '이 운동 기록을 삭제하시겠습니까?',
+                                  )
+                                ) {
+                                  deleteExercise(selectedDate, ex.id)
+                                }
+                              }}
+                            >
+                              삭제
+                            </DangerBtn>
+                          </div>
+                        </ListItem>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyText>아직 기록된 운동이 없습니다.</EmptyText>
+                  )}
+                  <AddBtn
+                    type="button"
+                    onClick={() => {
+                      setEditingExercise(null)
+                      setSelectedTemplate(null)
+                      setView('exercise-pick')
+                    }}
+                  >
+                    [운동 추가]
+                  </AddBtn>
+                </SectionCard>
+
+                <SectionCard>
+                  <SectionHead>
+                    <SectionTitle>📝 오늘 메모</SectionTitle>
+                  </SectionHead>
+                  <MemoArea
+                    value={memoDraft}
+                    onChange={(e) => setMemoDraft(e.target.value)}
+                    placeholder="컨디션, 특이사항 등을 적어 보세요"
                   />
-                </FieldGroup>
-                <FieldGroup>
-                  <FieldLabel>급여 (기본급)</FieldLabel>
-                  <Input
-                    placeholder="공제 후 실제 받은 급여 입력"
-                    inputMode="numeric"
-                    value={salaryRaw}
-                    onChange={(e) => setSalaryRaw(e.target.value)}
-                    enterKeyHint="next"
-                  />
-                </FieldGroup>
-                <FieldGroup>
-                  <FieldLabel>인센티브 (프로모션 수당)</FieldLabel>
-                  <Input
-                    placeholder="추가 수당 입력 (없으면 비워두기)"
-                    inputMode="numeric"
-                    value={incentiveRaw}
-                    onChange={(e) => setIncentiveRaw(e.target.value)}
-                    enterKeyHint="done"
-                  />
-                </FieldGroup>
-              </FormPanel>
-            ) : showExpenseForm && selectedDate ? (
-              <ExpenseEntryForm
-                key={
-                  editingExpense?.id ??
-                  (isAddingExpense ? `${selectedDate}-add` : `${selectedDate}-new`)
-                }
-                initialDate={selectedDate}
-                lockDate
-                initialValues={
-                  editingExpense
-                    ? {
-                        date: editingExpense.date,
-                        category: editingExpense.category,
-                        content: editingExpense.content,
-                        amount: editingExpense.amount,
+                  <MemoSaveBtn type="button" onClick={handleSaveMemo}>
+                    [메모 저장]
+                  </MemoSaveBtn>
+                </SectionCard>
+              </>
+            )}
+
+            {view === 'wage' && (
+              <>
+                <BackBtn type="button" onClick={() => setView('overview')}>
+                  ← 날짜 요약으로
+                </BackBtn>
+                <FormPanel>
+                  <FieldGroup>
+                    <FieldLabel>회사명 (또는 근무지)</FieldLabel>
+                    <Input
+                      placeholder="예: 쿠팡, 배달의민족 등"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      enterKeyHint="next"
+                    />
+                  </FieldGroup>
+                  <FieldGroup>
+                    <FieldLabel>총 금액 (입금 받은 금액)</FieldLabel>
+                    <Input
+                      placeholder="실제로 입금된 총 금액 입력"
+                      inputMode="numeric"
+                      value={totalRaw}
+                      onChange={(e) => setTotalRaw(e.target.value)}
+                      enterKeyHint="next"
+                    />
+                  </FieldGroup>
+                  <FieldGroup>
+                    <FieldLabel>인센티브 (프로모션 수당)</FieldLabel>
+                    <Input
+                      placeholder="추가 수당 입력 (없으면 비워두기)"
+                      inputMode="numeric"
+                      value={incentiveRaw}
+                      onChange={(e) => setIncentiveRaw(e.target.value)}
+                      enterKeyHint="done"
+                    />
+                  </FieldGroup>
+                  <FieldGroup>
+                    <FieldLabel>
+                      급여 (기본급) <AutoHint>· 자동 계산</AutoHint>
+                    </FieldLabel>
+                    <Input
+                      readOnly
+                      disabled
+                      aria-label="급여 (총 금액 - 인센티브)"
+                      value={
+                        totalNum > 0
+                          ? String(salaryNum)
+                          : ''
                       }
-                    : undefined
-                }
-                onSave={handleSaveExpense}
-                submitLabel={
-                  editingExpense ? '소비내역 수정하기' : '소비내역 저장하기'
-                }
-                onCancel={
-                  hasDayExpenses && (isAddingExpense || editingExpense != null)
-                    ? handleCancelExpenseForm
-                    : undefined
-                }
-              />
-            ) : (
-              <div className="flex flex-col gap-3">
-                <ul className="flex flex-col gap-3">
-                  {dayExpenses.map((item) => (
-                    <li
-                      key={item.id}
-                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      placeholder="총 금액 − 인센티브"
+                    />
+                  </FieldGroup>
+                  <FieldGroup>
+                    <FieldLabel>연장근무</FieldLabel>
+                    <OvertimeToggle
+                      type="button"
+                      $on={isOvertime}
+                      aria-pressed={isOvertime}
+                      onClick={() => setIsOvertime((v) => !v)}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          <span className="inline-flex shrink-0 items-center rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
-                            {item.category}
-                          </span>
-                          <span className="truncate text-sm font-semibold text-gray-800">
-                            {item.content}
-                          </span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <p className="text-sm font-bold tabular-nums text-gray-800">
-                            {formatKRW(item.amount)}
-                          </p>
-                          <button
-                            type="button"
-                            className="text-xs font-medium text-blue-500 transition-colors hover:text-blue-700"
-                            onClick={() => handleEditExpense(item)}
-                          >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            className="text-xs font-medium text-red-500 transition-colors hover:text-red-700"
-                            onClick={() => handleDeleteExpense(item.id)}
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                <button
+                      <OvertimeLabel>연장근무 했어요</OvertimeLabel>
+                      <CheckBox $on={isOvertime} aria-hidden>
+                        {isOvertime ? '✓' : ''}
+                      </CheckBox>
+                    </OvertimeToggle>
+                  </FieldGroup>
+                </FormPanel>
+              </>
+            )}
+
+            {view === 'exercise-pick' && (
+              <>
+                <BackBtn type="button" onClick={() => setView('overview')}>
+                  ← 날짜 요약으로
+                </BackBtn>
+                <SectionCard>
+                  <SectionTitle>운동 선택</SectionTitle>
+                  <TemplateList>
+                    {exerciseTemplates.map((tpl) => (
+                      <TemplateBtn
+                        key={tpl.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTemplate(tpl)
+                          setEditingExercise(null)
+                          setView('exercise-form')
+                        }}
+                      >
+                        {tpl.name}
+                      </TemplateBtn>
+                    ))}
+                  </TemplateList>
+                </SectionCard>
+              </>
+            )}
+
+            {view === 'exercise-form' && (
+              <>
+                <BackBtn
                   type="button"
-                  className="w-full rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50 py-4 text-base font-black text-indigo-700 transition active:scale-[0.99] active:bg-indigo-100"
-                  onClick={handleStartAddExpense}
+                  onClick={() =>
+                    setView(editingExercise ? 'overview' : 'exercise-pick')
+                  }
                 >
-                  + 추가
-                </button>
-              </div>
+                  ← 뒤로
+                </BackBtn>
+                <SectionCard>
+                  <ExerciseEntryForm
+                    template={selectedTemplate}
+                    initialValues={editingExercise}
+                    onSubmit={handleExerciseSubmit}
+                    onCancel={() => {
+                      setEditingExercise(null)
+                      setSelectedTemplate(null)
+                      setView('overview')
+                    }}
+                    submitLabel={editingExercise ? '수정 저장' : '저장'}
+                  />
+                </SectionCard>
+              </>
             )}
           </Scroll>
 
-          {activeTab === 'wage' && (
+          {view === 'wage' && (
             <StickyBottom>
-              <FinalLine>
-                <FinalCombined>
-                  <FinalStrong>
-                    {isToday ? '오늘의 최종 급여' : '최종 급여'}
-                  </FinalStrong>
-                  {': '}
-                  {formatKRW(finalPreview)}
-                </FinalCombined>
-              </FinalLine>
+              <FinalCombined>
+                {isToday ? '오늘의 입금 금액' : '입금 금액'}
+                {': '}
+                {formatKRW(totalNum)}
+              </FinalCombined>
               <ActionRow>
                 <SubmitBtn
                   type="button"
                   disabled={!canSubmit}
-                  onClick={handleSubmit}
+                  onClick={handleSubmitWage}
                 >
                   {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
                 </SubmitBtn>
                 {hasExistingRecord && (
-                  <DeleteRecordBtn
-                    type="button"
-                    aria-label="이 날의 근무 기록 삭제"
-                    onClick={handleDeleteRecord}
-                  >
+                  <DeleteRecordBtn type="button" onClick={handleDeleteWage}>
                     삭제하기
                   </DeleteRecordBtn>
                 )}
               </ActionRow>
+            </StickyBottom>
+          )}
+
+          {view === 'overview' && (
+            <StickyBottom>
+              <SubmitBtn type="button" onClick={closeAnimated}>
+                닫기
+              </SubmitBtn>
             </StickyBottom>
           )}
         </Sheet>
