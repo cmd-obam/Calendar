@@ -211,9 +211,13 @@ const ExerciseSummaryMeta = styled.span`
 const DayMarkers = styled.div`
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 1px;
   line-height: 1;
-  font-size: 0.62rem;
+  font-size: 0.58rem;
+  padding-top: 0.1rem;
+  max-width: 55%;
+  overflow: hidden;
 `
 
 const CalendarSection = styled.div`
@@ -255,8 +259,8 @@ const WeekHeader = styled.div`
   grid-template-columns: repeat(7, minmax(0, 1fr));
   width: 100%;
   min-width: 0;
-  gap: 2px;
-  margin-bottom: 0.35rem;
+  gap: 4px;
+  margin-bottom: 0.4rem;
 `
 
 const WeekHeadCell = styled.div<{ sunSat?: 'sun' | 'sat' }>`
@@ -276,10 +280,10 @@ const WeekHeadCell = styled.div<{ sunSat?: 'sun' | 'sat' }>`
 const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-auto-rows: 6rem;
+  grid-auto-rows: 6.25rem;
   width: 100%;
   min-width: 0;
-  gap: 3px;
+  gap: 4px;
 `
 
 const DayCell = styled.button<{
@@ -292,12 +296,12 @@ const DayCell = styled.button<{
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  height: 6rem;
-  max-height: 6rem;
-  min-height: 6rem;
-  padding: 0.26rem 0.125rem 0.3rem 0.125rem;
+  height: 6.25rem;
+  max-height: 6.25rem;
+  min-height: 6.25rem;
+  padding: 0.5rem 0.4rem 0.4rem 0.5rem;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   box-sizing: border-box;
   background: ${({ isSelected, isToday }) =>
@@ -336,7 +340,7 @@ const DayCellBody = styled.div`
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.125rem;
+  gap: 0.28rem;
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -345,14 +349,37 @@ const DayCellBody = styled.div`
   flex: 1;
 `
 
+const DayHeader = styled.div`
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  overflow: hidden;
+`
+
 const DayNum = styled.span<{ $isHoliday?: boolean }>`
   flex-shrink: 0;
   margin: 0;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.1;
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   color: ${({ $isHoliday }) =>
     $isHoliday ? 'var(--cal-sun, #ef4444)' : 'inherit'};
+`
+
+const DayRecords = styled.div`
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
 `
 
 const LogBadge = styled.div`
@@ -360,14 +387,14 @@ const LogBadge = styled.div`
   min-width: 0;
   min-height: 0;
   width: 100%;
-  padding: 0.25rem 0.125rem;
-  border-radius: 5px;
+  padding: 0.28rem 0.2rem;
+  border-radius: 8px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.22);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 0.0625rem;
+  gap: 0.1rem;
   overflow: hidden;
   box-sizing: border-box;
 `
@@ -384,7 +411,7 @@ const LogTitle = styled.span`
   width: 100%;
   font-size: 0.5625rem;
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1.1;
   color: var(--cal-text, #111827);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -593,7 +620,6 @@ export default function MainCalendar() {
                 <DayCell
                   key={idx}
                   type="button"
-                  className="h-24 min-h-24 max-h-24 overflow-hidden px-0.5"
                   muted={muted}
                   disabled={muted}
                   isSelected={isSelected}
@@ -607,8 +633,8 @@ export default function MainCalendar() {
                   }
                 >
                   {!muted && day != null && (
-                    <DayCellBody className="flex flex-col gap-y-0.5">
-                      <div className="flex w-full min-w-0 items-center justify-between overflow-hidden">
+                    <DayCellBody>
+                      <DayHeader>
                         <DayNum
                           className={isHoliday ? 'text-red-500' : undefined}
                           $isHoliday={isHoliday}
@@ -620,36 +646,30 @@ export default function MainCalendar() {
                           {hasExercise && <span title="운동">🏃</span>}
                           {hasMemo && <span title="메모">📝</span>}
                         </DayMarkers>
-                      </div>
-                      {log &&
-                        (showAmounts ? (
-                          <LogBadge className="flex flex-1 flex-col items-center justify-between px-0.5 py-1 text-center">
-                            <LogTitleWrap className="w-full text-center">
-                              <LogTitle
-                                className="w-full text-center leading-tight"
-                                title={log.title}
-                              >
-                                {log.title}
-                              </LogTitle>
-                            </LogTitleWrap>
-                            <LogWageWrap className="flex w-full flex-col items-center justify-center overflow-visible">
-                              <LogWage
-                                className="flex items-baseline gap-x-[2px] whitespace-nowrap text-[8px] tracking-[-0.05em]"
-                                title={formatKRW(log.finalWage)}
-                              >
-                                <span>{formatKRWAmount(log.finalWage)}</span>
-                                <LogWageUnit>원</LogWageUnit>
-                              </LogWage>
-                            </LogWageWrap>
-                          </LogBadge>
-                        ) : (
-                          <span
-                            className="mx-auto inline-flex max-w-full items-center justify-center truncate rounded-md bg-indigo-100 px-2 py-[2px] text-[11px] font-medium leading-none text-indigo-700"
-                            title={log.title}
-                          >
-                            {log.title}
-                          </span>
-                        ))}
+                      </DayHeader>
+                      <DayRecords>
+                        {log &&
+                          (showAmounts ? (
+                            <LogBadge>
+                              <LogTitleWrap>
+                                <LogTitle title={log.title}>{log.title}</LogTitle>
+                              </LogTitleWrap>
+                              <LogWageWrap>
+                                <LogWage title={formatKRW(log.finalWage)}>
+                                  <span>{formatKRWAmount(log.finalWage)}</span>
+                                  <LogWageUnit>원</LogWageUnit>
+                                </LogWage>
+                              </LogWageWrap>
+                            </LogBadge>
+                          ) : (
+                            <span
+                              className="mx-auto inline-flex max-w-full items-center justify-center truncate rounded-md bg-indigo-100 px-2 py-[2px] text-[11px] font-medium leading-none text-indigo-700"
+                              title={log.title}
+                            >
+                              {log.title}
+                            </span>
+                          ))}
+                      </DayRecords>
                     </DayCellBody>
                   )}
                 </DayCell>
