@@ -6,7 +6,14 @@ import {
   pad2,
   sumMonthlyTotalIncome,
 } from '../lib/monthlySettlement'
-import type { WorkLogsMap } from '../store/useWageStore'
+import {
+  calcIncomeAchievementRatio,
+  clampGaugePercent,
+  formatRatioOneDecimal,
+  parseWonInput,
+  toWonInteger,
+} from '../lib/financeMetrics'
+import { useWageStore, type WorkLogsMap } from '../store/useWageStore'
 
 function formatKRW(n: number): string {
   return `${Math.round(n).toLocaleString('ko-KR')}원`
@@ -226,6 +233,89 @@ const FooterNote = styled.p`
   line-height: 1.45;
 `
 
+const StatusSection = styled.div`
+  margin: 0 1rem 0.75rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--cal-border, #e5e7eb);
+  background: var(--cal-surface, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+`
+
+const StatusTitle = styled.h3`
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--cal-text, #111827);
+`
+
+const GoalTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+`
+
+const GoalLabel = styled.span`
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--cal-text-dim, #6b7280);
+`
+
+const GoalInputWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+`
+
+const GoalInput = styled.input`
+  width: 7.5rem;
+  max-width: 40vw;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border, #e5e7eb);
+  background: var(--cal-surface, #fff);
+  color: inherit;
+  text-align: right;
+
+  &:focus {
+    outline: 2px solid var(--cal-accent-strong, #6366f1);
+    outline-offset: 1px;
+  }
+`
+
+const ProgressTrack = styled.div`
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cal-muted, #e5e7eb);
+  overflow: hidden;
+`
+
+const ProgressFill = styled.div<{ pct: number }>`
+  height: 100%;
+  width: ${({ pct }) => pct}%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--cal-accent-strong, #6366f1) 0%,
+    var(--cal-accent-mid, #818cf8) 100%
+  );
+  transition: width 0.35s ease;
+`
+
+const ProgressMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--cal-text-dim, #6b7280);
+`
+
 export interface MonthlyReportModalProps {
   open: boolean
   onClose: () => void
@@ -241,6 +331,9 @@ export default function MonthlyReportModal({
   monthIndex,
   workLogs,
 }: MonthlyReportModalProps) {
+  const monthlyGoals = useWageStore((s) => s.monthlyGoals)
+  const setMonthlyGoal = useWageStore((s) => s.setMonthlyGoal)
+
   const [visible, setVisible] = useState(false)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
 
@@ -262,6 +355,7 @@ export default function MonthlyReportModal({
   }, [open])
 
   const ymPrefix = `${year}-${pad2(monthIndex + 1)}`
+  const yearMonthKey = ymPrefix
 
   const buckets = useMemo(
     () => buildWeekBuckets(workLogs, year, monthIndex),
@@ -287,6 +381,27 @@ export default function MonthlyReportModal({
     [workLogs, year, monthIndex],
   )
 
+  const monthlyGoal = useMemo(
+    () => toWonInteger(monthlyGoals[yearMonthKey] ?? 0),
+    [monthlyGoals, yearMonthKey],
+  )
+  const totalIncome = useMemo(
+    () => toWonInteger(monthIncomeTotal),
+    [monthIncomeTotal],
+  )
+  const incomeAchievementRatio = useMemo(
+    () => calcIncomeAchievementRatio(totalIncome, monthlyGoal),
+    [totalIncome, monthlyGoal],
+  )
+  const incomeAchievementLabel = useMemo(
+    () => formatRatioOneDecimal(incomeAchievementRatio),
+    [incomeAchievementRatio],
+  )
+  const incomeAchievementBarWidth = useMemo(
+    () => clampGaugePercent(incomeAchievementRatio),
+    [incomeAchievementRatio],
+  )
+
   const handleBackdrop = useCallback(() => {
     setVisible(false)
     window.setTimeout(onClose, 300)
@@ -295,6 +410,13 @@ export default function MonthlyReportModal({
   const toggleWeek = useCallback((weekStartKey: string) => {
     setExpandedKey((k) => (k === weekStartKey ? null : weekStartKey))
   }, [])
+
+  const handleGoalChange = useCallback(
+    (raw: string) => {
+      setMonthlyGoal(yearMonthKey, parseWonInput(raw))
+    },
+    [setMonthlyGoal, yearMonthKey],
+  )
 
   if (!open && !visible) return null
 
@@ -332,6 +454,45 @@ export default function MonthlyReportModal({
               <SumVal>{formatKRW(monthIncomeTotal)}</SumVal>
             </SumCard>
           </SummaryGrid>
+
+          <StatusSection>
+            <StatusTitle>월간 현황</StatusTitle>
+            <GoalTop>
+              <GoalLabel>월별 목표</GoalLabel>
+              <GoalInputWrap>
+                <GoalInput
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-label="월 목표 금액"
+                  value={monthlyGoal === 0 ? '' : String(monthlyGoal)}
+                  placeholder="0"
+                  onChange={(e) => handleGoalChange(e.target.value)}
+                />
+                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>원</span>
+              </GoalInputWrap>
+            </GoalTop>
+            <ProgressTrack
+              role="progressbar"
+              aria-valuenow={incomeAchievementBarWidth}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+            >
+              <ProgressFill pct={incomeAchievementBarWidth} />
+            </ProgressTrack>
+            <ProgressMeta>
+              <span>
+                목표 달성률{' '}
+                {monthlyGoal > 0 ? `${incomeAchievementLabel}%` : '미설정'}
+              </span>
+              <span>
+                {monthlyGoal > 0
+                  ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
+                  : '—'}
+              </span>
+            </ProgressMeta>
+          </StatusSection>
 
           <Scroll>
             <Sub
