@@ -364,7 +364,7 @@ const DayNum = styled.span<{ $isHoliday?: boolean }>`
   flex-shrink: 0;
   margin: 0;
   padding: 0;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.02em;
