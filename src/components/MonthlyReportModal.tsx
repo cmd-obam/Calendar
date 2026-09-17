@@ -7,16 +7,31 @@ import {
   sumMonthlyTotalIncome,
 } from '../lib/monthlySettlement'
 import {
+  buildExerciseWeekBuckets,
+  formatExerciseLine,
+  sumMonthlyExerciseTotals,
+} from '../lib/exerciseSettlement'
+import {
   calcIncomeAchievementRatio,
   clampGaugePercent,
   formatRatioOneDecimal,
   parseWonInput,
   toWonInteger,
 } from '../lib/financeMetrics'
+import { formatDuration } from '../data/exerciseTemplates'
 import { useWageStore, type WorkLogsMap } from '../store/useWageStore'
+import { useExerciseStore } from '../store/useExerciseStore'
+
+type DetailTab = 'income' | 'exercise'
 
 function formatKRW(n: number): string {
   return `${Math.round(n).toLocaleString('ko-KR')}원`
+}
+
+function formatKm(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0km'
+  const rounded = Math.round(n * 10) / 10
+  return `${rounded}km`
 }
 
 const Root = styled.div<{ $open: boolean }>`
@@ -73,7 +88,7 @@ const Panel = styled.div<{ $visible: boolean }>`
 
 const Head = styled.div`
   flex-shrink: 0;
-  padding: 0.65rem 1rem 0.75rem;
+  padding: 0.65rem 1rem 0.55rem;
   border-bottom: 1px solid var(--cal-border, #e5e7eb);
 `
 
@@ -97,6 +112,38 @@ const Sub = styled.p`
   font-size: 0.72rem;
   color: var(--cal-text-dim, #6b7280);
   font-weight: 600;
+`
+
+const TabBar = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  padding: 0.65rem 1rem 0.55rem;
+  background: var(--cal-surface, #fff);
+  border-bottom: 1px solid var(--cal-border, #f3f4f6);
+`
+
+const TabBtn = styled.button<{ $active: boolean }>`
+  min-height: 2.6rem;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ $active }) => ($active ? 'transparent' : 'var(--cal-border, #e5e7eb)')};
+  background: ${({ $active }) =>
+    $active
+      ? 'linear-gradient(135deg, #4f46e5 0%, #818cf8 100%)'
+      : 'var(--cal-muted, #f3f4f6)'};
+  color: ${({ $active }) => ($active ? '#fff' : 'var(--cal-text-dim, #6b7280)')};
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: ${({ $active }) =>
+    $active ? '0 6px 14px rgba(79, 70, 229, 0.25)' : 'none'};
+
+  &:active {
+    transform: scale(0.98);
+  }
 `
 
 const SummaryGrid = styled.div`
@@ -234,7 +281,7 @@ const FooterNote = styled.p`
 `
 
 const StatusSection = styled.div`
-  margin: 0 1rem 0.75rem;
+  margin: 0 0 0.75rem;
   padding: 0.85rem 0.9rem;
   border-radius: 14px;
   border: 1px solid var(--cal-border, #e5e7eb);
@@ -316,6 +363,32 @@ const ProgressMeta = styled.div`
   color: var(--cal-text-dim, #6b7280);
 `
 
+const DayBlock = styled.div`
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--cal-border, #f3f4f6);
+
+  &:last-child {
+    border-bottom: none;
+  }
+`
+
+const DayLabel = styled.p`
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #111827;
+`
+
+const ExLine = styled.li`
+  margin: 0;
+  padding: 0.15rem 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #4b5563;
+  line-height: 1.35;
+  word-break: keep-all;
+`
+
 export interface MonthlyReportModalProps {
   open: boolean
   onClose: () => void
@@ -333,9 +406,16 @@ export default function MonthlyReportModal({
 }: MonthlyReportModalProps) {
   const monthlyGoals = useWageStore((s) => s.monthlyGoals)
   const setMonthlyGoal = useWageStore((s) => s.setMonthlyGoal)
+  const exerciseRecords = useExerciseStore((s) => s.records)
 
   const [visible, setVisible] = useState(false)
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  const [tab, setTab] = useState<DetailTab>('income')
+  const [expandedIncomeKey, setExpandedIncomeKey] = useState<string | null>(
+    null,
+  )
+  const [expandedExerciseKeys, setExpandedExerciseKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
 
   useEffect(() => {
     if (!open) {
@@ -343,7 +423,9 @@ export default function MonthlyReportModal({
       return () => cancelAnimationFrame(id)
     }
     const id = requestAnimationFrame(() => {
-      setExpandedKey(null)
+      setExpandedIncomeKey(null)
+      setExpandedExerciseKeys(new Set())
+      setTab('income')
       setVisible(true)
     })
     const prevOverflow = document.body.style.overflow
@@ -354,12 +436,27 @@ export default function MonthlyReportModal({
     }
   }, [open])
 
+  useEffect(() => {
+    setExpandedIncomeKey(null)
+    setExpandedExerciseKeys(new Set())
+  }, [year, monthIndex])
+
   const ymPrefix = `${year}-${pad2(monthIndex + 1)}`
   const yearMonthKey = ymPrefix
 
-  const buckets = useMemo(
+  const incomeBuckets = useMemo(
     () => buildWeekBuckets(workLogs, year, monthIndex),
     [workLogs, year, monthIndex],
+  )
+
+  const exerciseBuckets = useMemo(
+    () => buildExerciseWeekBuckets(exerciseRecords, year, monthIndex),
+    [exerciseRecords, year, monthIndex],
+  )
+
+  const exerciseMonthTotals = useMemo(
+    () => sumMonthlyExerciseTotals(exerciseRecords, year, monthIndex),
+    [exerciseRecords, year, monthIndex],
   )
 
   const monthTitle = useMemo(
@@ -407,8 +504,17 @@ export default function MonthlyReportModal({
     window.setTimeout(onClose, 300)
   }, [onClose])
 
-  const toggleWeek = useCallback((weekStartKey: string) => {
-    setExpandedKey((k) => (k === weekStartKey ? null : weekStartKey))
+  const toggleIncomeWeek = useCallback((weekStartKey: string) => {
+    setExpandedIncomeKey((k) => (k === weekStartKey ? null : weekStartKey))
+  }, [])
+
+  const toggleExerciseWeek = useCallback((weekStartKey: string) => {
+    setExpandedExerciseKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(weekStartKey)) next.delete(weekStartKey)
+      else next.add(weekStartKey)
+      return next
+    })
   }, [])
 
   const handleGoalChange = useCallback(
@@ -423,11 +529,7 @@ export default function MonthlyReportModal({
   return (
     <Root $open={open}>
       <Backdrop type="button" aria-label="닫기" onClick={handleBackdrop} />
-      <PanelWrap
-        onClick={(e) => {
-          e.stopPropagation()
-        }}
-      >
+      <PanelWrap onClick={(e) => e.stopPropagation()}>
         <Panel
           $visible={visible && open}
           role="dialog"
@@ -440,148 +542,286 @@ export default function MonthlyReportModal({
             <Sub>{monthTitle} · 일요일~토요일 기준 주차</Sub>
           </Head>
 
-          <SummaryGrid>
-            <SumCard>
-              <SumLabel>템플릿 입금액 합계</SumLabel>
-              <SumVal>{formatKRW(cat.amount)}</SumVal>
-            </SumCard>
-            <SumCard>
-              <SumLabel>인센티브 합계</SumLabel>
-              <SumVal>{formatKRW(cat.incentive)}</SumVal>
-            </SumCard>
-            <SumCard style={{ gridColumn: '1 / -1' }}>
-              <SumLabel>당월 총 수입 (일별 합계)</SumLabel>
-              <SumVal>{formatKRW(monthIncomeTotal)}</SumVal>
-            </SumCard>
-          </SummaryGrid>
-
-          <StatusSection>
-            <StatusTitle>월간 현황</StatusTitle>
-            <GoalTop>
-              <GoalLabel>월별 목표</GoalLabel>
-              <GoalInputWrap>
-                <GoalInput
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  aria-label="월 목표 금액"
-                  value={monthlyGoal === 0 ? '' : String(monthlyGoal)}
-                  placeholder="0"
-                  onChange={(e) => handleGoalChange(e.target.value)}
-                />
-                <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>원</span>
-              </GoalInputWrap>
-            </GoalTop>
-            <ProgressTrack
-              role="progressbar"
-              aria-valuenow={incomeAchievementBarWidth}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+          <TabBar role="tablist" aria-label="상세보기 구분">
+            <TabBtn
+              type="button"
+              role="tab"
+              aria-selected={tab === 'income'}
+              $active={tab === 'income'}
+              onClick={() => setTab('income')}
             >
-              <ProgressFill pct={incomeAchievementBarWidth} />
-            </ProgressTrack>
-            <ProgressMeta>
-              <span>
-                목표 달성률{' '}
-                {monthlyGoal > 0 ? `${incomeAchievementLabel}%` : '미설정'}
-              </span>
-              <span>
-                {monthlyGoal > 0
-                  ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
-                  : '—'}
-              </span>
-            </ProgressMeta>
-          </StatusSection>
-
-          <Scroll>
-            <Sub
-              style={{
-                fontSize: '0.68rem',
-                marginBottom: '0.45rem',
-                fontWeight: 800,
-              }}
+              수입
+            </TabBtn>
+            <TabBtn
+              type="button"
+              role="tab"
+              aria-selected={tab === 'exercise'}
+              $active={tab === 'exercise'}
+              onClick={() => setTab('exercise')}
             >
-              주차별 카드
-            </Sub>
-            {buckets.length === 0 ? (
-              <Sub
-                style={{
-                  fontSize: '0.75rem',
-                  marginBottom: '0.45rem',
-                  fontWeight: 700,
-                  color: 'var(--cal-text-dim, #6b7280)',
-                }}
-              >
-                이번 달에 등록된 근무가 없어 주차별 카드가 없습니다.
-              </Sub>
-            ) : (
-              buckets.map((b) => {
-                const expanded = expandedKey === b.weekStartKey
-                return (
-                  <WeekCard key={b.weekStartKey}>
-                    <WeekHeadBtn
-                      type="button"
-                      $expanded={expanded}
-                      onClick={() => toggleWeek(b.weekStartKey)}
-                    >
-                      <WeekHeadTop>
-                        <WeekTitle>
-                          {b.weekIndex}주차 ({b.weekRangeLabel})
-                        </WeekTitle>
-                        <Chevron $expanded={expanded}>▼</Chevron>
-                      </WeekHeadTop>
-                      <WeekMeta>당월 근무 {b.rows.length}일</WeekMeta>
-                      <WeekMeta>
-                        입금액 {formatKRW(b.amountSum)} · 인센{' '}
-                        {formatKRW(b.incentiveSum)} · 합계{' '}
-                        {formatKRW(b.finalWageSum)}
-                      </WeekMeta>
-                    </WeekHeadBtn>
-                    <AccBody $open={expanded}>
-                      <TableWrap>
-                        <Table>
-                          <thead>
-                            <tr>
-                              <Th>날짜</Th>
-                              <Th>템플릿</Th>
-                              <Th style={{ textAlign: 'right' }}>입금액</Th>
-                              <Th style={{ textAlign: 'right' }}>인센</Th>
-                              <Th style={{ textAlign: 'right' }}>일 계</Th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {b.rows.map((r) => (
-                              <tr key={r.dateKey}>
-                                <Td>
-                                  {r.dateKey.slice(5)} ({r.weekdayLabel})
-                                </Td>
-                                <Td>{r.entry.title}</Td>
-                                <Td style={{ textAlign: 'right' }}>
-                                  {formatKRW(r.entry.amount)}
-                                </Td>
-                                <Td style={{ textAlign: 'right' }}>
-                                  {formatKRW(r.entry.incentive)}
-                                </Td>
-                                <Td style={{ textAlign: 'right' }}>
-                                  {formatKRW(r.entry.finalWage)}
-                                </Td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </Table>
-                      </TableWrap>
-                    </AccBody>
-                  </WeekCard>
-                )
-              })
-            )}
-            <FooterNote>
-              · 일별 합계는 [선택한 템플릿 입금액] + [인센티브]로 계산됩니다.
-              <br />· 각 템플릿은 실제 입금된 금액을 사용자가 직접 입력하여
-              만든 것이므로 별도의 세전·세후·할증 보정을 적용하지 않습니다.
-            </FooterNote>
-          </Scroll>
+              운동
+            </TabBtn>
+          </TabBar>
+
+          {tab === 'income' ? (
+            <>
+              <SummaryGrid>
+                <SumCard>
+                  <SumLabel>템플릿 입금액 합계</SumLabel>
+                  <SumVal>{formatKRW(cat.amount)}</SumVal>
+                </SumCard>
+                <SumCard>
+                  <SumLabel>인센티브 합계</SumLabel>
+                  <SumVal>{formatKRW(cat.incentive)}</SumVal>
+                </SumCard>
+                <SumCard style={{ gridColumn: '1 / -1' }}>
+                  <SumLabel>당월 총 수입 (일별 합계)</SumLabel>
+                  <SumVal>{formatKRW(monthIncomeTotal)}</SumVal>
+                </SumCard>
+              </SummaryGrid>
+
+              <div style={{ padding: '0 1rem' }}>
+                <StatusSection>
+                  <StatusTitle>월간 현황</StatusTitle>
+                  <GoalTop>
+                    <GoalLabel>월별 목표</GoalLabel>
+                    <GoalInputWrap>
+                      <GoalInput
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        aria-label="월 목표 금액"
+                        value={monthlyGoal === 0 ? '' : String(monthlyGoal)}
+                        placeholder="0"
+                        onChange={(e) => handleGoalChange(e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                        원
+                      </span>
+                    </GoalInputWrap>
+                  </GoalTop>
+                  <ProgressTrack
+                    role="progressbar"
+                    aria-valuenow={incomeAchievementBarWidth}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`수입 달성률 ${incomeAchievementLabel}%`}
+                  >
+                    <ProgressFill pct={incomeAchievementBarWidth} />
+                  </ProgressTrack>
+                  <ProgressMeta>
+                    <span>
+                      목표 달성률{' '}
+                      {monthlyGoal > 0
+                        ? `${incomeAchievementLabel}%`
+                        : '미설정'}
+                    </span>
+                    <span>
+                      {monthlyGoal > 0
+                        ? `${formatKRW(totalIncome)} / ${formatKRW(monthlyGoal)}`
+                        : '—'}
+                    </span>
+                  </ProgressMeta>
+                </StatusSection>
+              </div>
+
+              <Scroll>
+                <Sub
+                  style={{
+                    fontSize: '0.68rem',
+                    marginBottom: '0.45rem',
+                    fontWeight: 800,
+                  }}
+                >
+                  주차별 수입 카드
+                </Sub>
+                {incomeBuckets.length === 0 ? (
+                  <Sub
+                    style={{
+                      fontSize: '0.75rem',
+                      marginBottom: '0.45rem',
+                      fontWeight: 700,
+                      color: 'var(--cal-text-dim, #6b7280)',
+                    }}
+                  >
+                    이번 달에 등록된 근무가 없어 주차별 카드가 없습니다.
+                  </Sub>
+                ) : (
+                  incomeBuckets.map((b) => {
+                    const expanded = expandedIncomeKey === b.weekStartKey
+                    return (
+                      <WeekCard key={b.weekStartKey}>
+                        <WeekHeadBtn
+                          type="button"
+                          $expanded={expanded}
+                          onClick={() => toggleIncomeWeek(b.weekStartKey)}
+                        >
+                          <WeekHeadTop>
+                            <WeekTitle>
+                              {b.weekIndex}주차 ({b.weekRangeLabel})
+                            </WeekTitle>
+                            <Chevron $expanded={expanded}>▼</Chevron>
+                          </WeekHeadTop>
+                          <WeekMeta>당월 근무 {b.rows.length}일</WeekMeta>
+                          <WeekMeta>
+                            입금액 {formatKRW(b.amountSum)} · 인센{' '}
+                            {formatKRW(b.incentiveSum)} · 합계{' '}
+                            {formatKRW(b.finalWageSum)}
+                          </WeekMeta>
+                        </WeekHeadBtn>
+                        <AccBody $open={expanded}>
+                          <TableWrap>
+                            <Table>
+                              <thead>
+                                <tr>
+                                  <Th>날짜</Th>
+                                  <Th>근무지</Th>
+                                  <Th style={{ textAlign: 'right' }}>입금액</Th>
+                                  <Th style={{ textAlign: 'right' }}>인센</Th>
+                                  <Th style={{ textAlign: 'right' }}>일 계</Th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {b.rows.map((r) => (
+                                  <tr key={r.dateKey}>
+                                    <Td>
+                                      {r.dateKey.slice(5)} ({r.weekdayLabel})
+                                    </Td>
+                                    <Td>{r.entry.title}</Td>
+                                    <Td style={{ textAlign: 'right' }}>
+                                      {formatKRW(r.entry.amount)}
+                                    </Td>
+                                    <Td style={{ textAlign: 'right' }}>
+                                      {formatKRW(r.entry.incentive)}
+                                    </Td>
+                                    <Td style={{ textAlign: 'right' }}>
+                                      {formatKRW(r.entry.finalWage)}
+                                    </Td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </Table>
+                          </TableWrap>
+                        </AccBody>
+                      </WeekCard>
+                    )
+                  })
+                )}
+                <FooterNote>
+                  · 일별 합계는 [기본급] + [인센티브]로 계산됩니다.
+                  <br />· 연장근무 여부는 금액 계산에 포함되지 않습니다.
+                </FooterNote>
+              </Scroll>
+            </>
+          ) : (
+            <>
+              <SummaryGrid>
+                <SumCard>
+                  <SumLabel>운동한 날</SumLabel>
+                  <SumVal>{exerciseMonthTotals.workoutDays}일</SumVal>
+                </SumCard>
+                <SumCard>
+                  <SumLabel>총 운동 시간</SumLabel>
+                  <SumVal>
+                    {formatDuration(exerciseMonthTotals.totalMinutes)}
+                  </SumVal>
+                </SumCard>
+                {exerciseMonthTotals.totalDistanceKm > 0 && (
+                  <SumCard style={{ gridColumn: '1 / -1' }}>
+                    <SumLabel>총 운동 거리</SumLabel>
+                    <SumVal>
+                      {formatKm(exerciseMonthTotals.totalDistanceKm)}
+                    </SumVal>
+                  </SumCard>
+                )}
+              </SummaryGrid>
+
+              <Scroll>
+                <Sub
+                  style={{
+                    fontSize: '0.68rem',
+                    marginBottom: '0.45rem',
+                    fontWeight: 800,
+                  }}
+                >
+                  주차별 운동 카드 · 기본 접힘
+                </Sub>
+                {exerciseBuckets.map((b) => {
+                  const expanded = expandedExerciseKeys.has(b.weekStartKey)
+                  const hasRecords = b.workoutDays > 0
+                  return (
+                    <WeekCard key={b.weekStartKey}>
+                      <WeekHeadBtn
+                        type="button"
+                        $expanded={expanded}
+                        onClick={() => toggleExerciseWeek(b.weekStartKey)}
+                      >
+                        <WeekHeadTop>
+                          <WeekTitle>
+                            {b.weekIndex}주차 ({b.weekRangeLabel})
+                          </WeekTitle>
+                          <Chevron $expanded={expanded}>▼</Chevron>
+                        </WeekHeadTop>
+                        {hasRecords ? (
+                          <>
+                            <WeekMeta>운동한 날 {b.workoutDays}일</WeekMeta>
+                            <WeekMeta>
+                              총 시간 {formatDuration(b.totalMinutes)}
+                              {b.totalDistanceKm > 0
+                                ? ` · 거리 ${formatKm(b.totalDistanceKm)}`
+                                : ''}
+                            </WeekMeta>
+                            <WeekMeta>운동 종목 {b.uniqueTypeCount}개</WeekMeta>
+                          </>
+                        ) : (
+                          <WeekMeta>운동 기록 없음</WeekMeta>
+                        )}
+                      </WeekHeadBtn>
+                      <AccBody $open={expanded}>
+                        {hasRecords ? (
+                          b.dayGroups.map((g) => {
+                            const [, mm, dd] = g.dateKey.split('-')
+                            return (
+                              <DayBlock key={g.dateKey}>
+                                <DayLabel>
+                                  {Number(mm)}월 {Number(dd)}일 (
+                                  {g.weekdayLabel})
+                                </DayLabel>
+                                <ul
+                                  style={{
+                                    margin: 0,
+                                    padding: 0,
+                                    listStyle: 'none',
+                                  }}
+                                >
+                                  {g.exercises.map((ex) => (
+                                    <ExLine key={ex.id}>
+                                      · {formatExerciseLine(ex)}
+                                    </ExLine>
+                                  ))}
+                                </ul>
+                              </DayBlock>
+                            )
+                          })
+                        ) : (
+                          <DayBlock>
+                            <WeekMeta>
+                              이 주차(당월 {b.monthClippedLabel})에는 기록된
+                              운동이 없습니다.
+                            </WeekMeta>
+                          </DayBlock>
+                        )}
+                      </AccBody>
+                    </WeekCard>
+                  )
+                })}
+                <FooterNote>
+                  · 주차는 일요일~토요일 달력 범위로 표시합니다.
+                  <br />· 운동량 집계는 선택한 달의 1일~말일 기록만 포함합니다.
+                </FooterNote>
+              </Scroll>
+            </>
+          )}
         </Panel>
       </PanelWrap>
     </Root>
