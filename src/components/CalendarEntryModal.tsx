@@ -419,20 +419,6 @@ const ActionRow = styled.div`
   align-items: stretch;
 `
 
-const DeleteRecordBtn = styled.button`
-  flex-shrink: 0;
-  min-width: 5.75rem;
-  padding: 1rem 0.9rem;
-  font-size: 0.95rem;
-  font-weight: 900;
-  border: none;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.38);
-`
-
 const SubmitBtn = styled.button`
   flex: 1;
   min-height: 56px;
@@ -787,24 +773,33 @@ export default function CalendarEntryModal({
                     <SectionTitle>💰 수입</SectionTitle>
                   </SectionHead>
                   {hasExistingRecord && existingRecord ? (
-                    <DetailGrid>
-                      <DetailKey>근무지</DetailKey>
-                      <DetailVal>{existingRecord.title}</DetailVal>
-                      <DetailKey>기본급</DetailKey>
-                      <DetailVal>{formatKRW(existingRecord.amount)}</DetailVal>
-                      <DetailKey>인센티브</DetailKey>
-                      <DetailVal>
-                        {formatKRW(existingRecord.incentive)}
-                      </DetailVal>
-                      <DetailKey>연장근무</DetailKey>
-                      <DetailVal>
-                        {existingRecord.isOvertime ? '✓' : '—'}
-                      </DetailVal>
-                      <DetailKey>총 금액</DetailKey>
-                      <DetailVal>
-                        {formatKRW(existingRecord.finalWage)}
-                      </DetailVal>
-                    </DetailGrid>
+                    <>
+                      <DetailGrid>
+                        <DetailKey>근무지</DetailKey>
+                        <DetailVal>{existingRecord.title}</DetailVal>
+                        <DetailKey>기본급</DetailKey>
+                        <DetailVal>
+                          {formatKRW(existingRecord.amount)}
+                        </DetailVal>
+                        <DetailKey>인센티브</DetailKey>
+                        <DetailVal>
+                          {formatKRW(existingRecord.incentive)}
+                        </DetailVal>
+                        <DetailKey>연장근무</DetailKey>
+                        <DetailVal>
+                          {existingRecord.isOvertime ? '✓' : '—'}
+                        </DetailVal>
+                        <DetailKey>총 금액</DetailKey>
+                        <DetailVal>
+                          {formatKRW(existingRecord.finalWage)}
+                        </DetailVal>
+                      </DetailGrid>
+                      <div className="flex justify-end gap-1">
+                        <DangerBtn type="button" onClick={handleDeleteWage}>
+                          삭제
+                        </DangerBtn>
+                      </div>
+                    </>
                   ) : (
                     <EmptyText>아직 기록된 수입이 없습니다.</EmptyText>
                   )}
@@ -1041,11 +1036,6 @@ export default function CalendarEntryModal({
                 >
                   {hasExistingRecord ? '수정하기' : '+ 근무 등록하기'}
                 </SubmitBtn>
-                {hasExistingRecord && (
-                  <DeleteRecordBtn type="button" onClick={handleDeleteWage}>
-                    삭제하기
-                  </DeleteRecordBtn>
-                )}
               </ActionRow>
             </StickyBottom>
           )}
