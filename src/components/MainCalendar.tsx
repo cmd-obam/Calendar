@@ -4,6 +4,9 @@ import CalendarEntryModal from './CalendarEntryModal'
 import MonthlyReportModal from './MonthlyReportModal'
 import SettingsModal from './SettingsModal'
 import TopAppBar from './TopAppBar'
+import BottomNavigation, {
+  type BottomNavTab,
+} from './layout/BottomNavigation'
 import { sumMonthlyTotalIncome } from '../lib/monthlySettlement'
 import { useWageStore } from '../store/useWageStore'
 import { useExerciseStore } from '../store/useExerciseStore'
@@ -523,6 +526,7 @@ export default function MainCalendar() {
   const [reportOpen, setReportOpen] = useState(false)
   const [showAmounts, setShowAmounts] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [navTab, setNavTab] = useState<BottomNavTab>('home')
 
   const exerciseRecords = useExerciseStore((s) => s.records)
 
@@ -584,9 +588,25 @@ export default function MainCalendar() {
     [year, monthIndex, setSelectedDate],
   )
 
+  const handleNavChange = useCallback((tab: BottomNavTab) => {
+    setNavTab(tab)
+    if (tab === 'home') {
+      setReportOpen(false)
+      setIsSettingsOpen(false)
+      return
+    }
+    if (tab === 'report') {
+      setIsSettingsOpen(false)
+      setReportOpen(true)
+      return
+    }
+    setReportOpen(false)
+    setIsSettingsOpen(true)
+  }, [])
+
   return (
     <AppFrame>
-      <TopAppBar onOpenSettings={() => setIsSettingsOpen(true)} />
+      <TopAppBar onOpenSettings={() => handleNavChange('settings')} />
 
       <Card>
         <Dashboard>
@@ -631,7 +651,7 @@ export default function MainCalendar() {
           </MetricsRow>
 
           <QuickMenu>
-            <QuickMenuBtn type="button" onClick={() => setReportOpen(true)}>
+            <QuickMenuBtn type="button" onClick={() => handleNavChange('report')}>
               <QuickIcon aria-hidden>📊</QuickIcon>
               <QuickLabel>상세보기</QuickLabel>
             </QuickMenuBtn>
@@ -787,7 +807,10 @@ export default function MainCalendar() {
 
       <MonthlyReportModal
         open={reportOpen}
-        onClose={() => setReportOpen(false)}
+        onClose={() => {
+          setReportOpen(false)
+          setNavTab('home')
+        }}
         year={year}
         monthIndex={monthIndex}
         workLogs={workLogs}
@@ -795,8 +818,13 @@ export default function MainCalendar() {
 
       <SettingsModal
         open={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={() => {
+          setIsSettingsOpen(false)
+          setNavTab('home')
+        }}
       />
+
+      <BottomNavigation active={navTab} onChange={handleNavChange} />
     </AppFrame>
   )
 }

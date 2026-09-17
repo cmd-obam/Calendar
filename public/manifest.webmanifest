@@ -1,0 +1,20 @@
+{
+  "name": "급여·운동 캘린더",
+  "short_name": "Calendar",
+  "description": "수입·연장근무·운동·메모를 날짜별로 관리하는 개인 기록 캘린더",
+  "start_url": "/Calendar/",
+  "scope": "/Calendar/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#eef2f6",
+  "theme_color": "#6366f1",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/Calendar/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
