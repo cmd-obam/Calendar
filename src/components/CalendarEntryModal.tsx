@@ -546,9 +546,6 @@ export default function CalendarEntryModal({
   const addExercise = useExerciseStore((s) => s.addExercise)
   const updateExercise = useExerciseStore((s) => s.updateExercise)
   const deleteExercise = useExerciseStore((s) => s.deleteExercise)
-  const toggleExerciseCompleted = useExerciseStore(
-    (s) => s.toggleExerciseCompleted,
-  )
   const updateMemo = useExerciseStore((s) => s.updateMemo)
 
   const existingRecord = useMemo(
@@ -832,14 +829,6 @@ export default function CalendarEntryModal({
                             </span>
                           </ListMeta>
                           <div className="flex justify-end gap-1">
-                            <GhostBtn
-                              type="button"
-                              onClick={() =>
-                                toggleExerciseCompleted(selectedDate, ex.id)
-                              }
-                            >
-                              {ex.completed ? '미완료' : '완료'}
-                            </GhostBtn>
                             <GhostBtn
                               type="button"
                               onClick={() => {
