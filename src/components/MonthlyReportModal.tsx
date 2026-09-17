@@ -19,6 +19,7 @@ import {
   toWonInteger,
 } from '../lib/financeMetrics'
 import { formatDuration } from '../data/exerciseTemplates'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { useWageStore, type WorkLogsMap } from '../store/useWageStore'
 import { useExerciseStore } from '../store/useExerciseStore'
 
@@ -40,6 +41,8 @@ const Root = styled.div<{ $open: boolean }>`
   z-index: 950;
   pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
   visibility: ${({ $open }) => ($open ? 'visible' : 'hidden')};
+  touch-action: none;
+  overscroll-behavior: none;
 `
 
 const Backdrop = styled.button`
@@ -69,9 +72,11 @@ const PanelWrap = styled.div`
 
 const Panel = styled.div<{ $visible: boolean }>`
   pointer-events: auto;
+  touch-action: pan-y;
   width: 100%;
   max-width: 480px;
   max-height: min(92dvh, 100%);
+  min-height: 0;
   background: var(--cal-surface, #fff);
   color: var(--cal-text, #111827);
   border-radius: 20px 20px 0 0;
@@ -177,9 +182,12 @@ const SumVal = styled.div`
 `
 
 const Scroll = styled.div`
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0.65rem 1rem 1rem;
 `
 
@@ -417,6 +425,8 @@ export default function MonthlyReportModal({
     () => new Set(),
   )
 
+  useBodyScrollLock(open)
+
   useEffect(() => {
     if (!open) {
       const id = requestAnimationFrame(() => setVisible(false))
@@ -428,11 +438,8 @@ export default function MonthlyReportModal({
       setTab('income')
       setVisible(true)
     })
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     return () => {
       cancelAnimationFrame(id)
-      document.body.style.overflow = prevOverflow
     }
   }, [open])
 

@@ -236,34 +236,47 @@ const QuickLabel = styled.span`
 
 const DayMarkers = styled.div`
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.18rem;
+  align-content: flex-start;
+  gap: 0.1rem 0.14rem;
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  /* 잘림 방지: 줄바꿈으로 수용 (부모 칸 overflow는 유지) */
+  overflow: visible;
+  line-height: 1;
+  font-size: 0.58rem;
+  flex-shrink: 0;
+  box-sizing: border-box;
+`
+
+const MarkerIcon = styled.span`
+  flex: 0 0 auto;
   line-height: 1;
   font-size: 0.62rem;
-  flex-shrink: 0;
 `
 
 const CellOvertimeStar = styled.span`
   color: #dc2626;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   line-height: 1;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   font-weight: 700;
 `
 
 const HiddenCount = styled.span`
-  flex-shrink: 0;
-  font-size: 0.58rem;
+  flex: 0 0 auto;
+  font-size: 0.55rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   color: var(--cal-text-dim, #6b7280);
   line-height: 1;
+  white-space: nowrap;
+  padding: 0.05rem 0.12rem;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.06);
 `
 
 const CalendarSection = styled.div`
@@ -346,7 +359,7 @@ const WeekHeadCell = styled.div<{ sunSat?: 'sun' | 'sat' }>`
 const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-auto-rows: 6.25rem;
+  grid-auto-rows: 6.5rem;
   width: 100%;
   min-width: 0;
   gap: 4px;
@@ -362,10 +375,10 @@ const DayCell = styled.button<{
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  height: 6.25rem;
-  max-height: 6.25rem;
-  min-height: 6.25rem;
-  padding: 0.5rem 0.4rem 0.4rem 0.5rem;
+  height: 6.5rem;
+  max-height: 6.5rem;
+  min-height: 6.5rem;
+  padding: 0.35rem 0.28rem 0.3rem 0.32rem;
   border: none;
   border-radius: 12px;
   overflow: hidden;
@@ -406,7 +419,7 @@ const DayCellBody = styled.div`
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.28rem;
+  gap: 0.2rem;
   min-width: 0;
   min-height: 0;
   width: 100%;
@@ -422,14 +435,13 @@ const DayHeader = styled.div`
   align-items: flex-start;
   justify-content: flex-start;
   flex-shrink: 0;
-  overflow: hidden;
 `
 
 const DayNum = styled.span<{ $isHoliday?: boolean }>`
   flex-shrink: 0;
-  margin: -2px 0 0 -2px;
-  padding: 0;
-  font-size: 0.75rem;
+  margin: 0;
+  padding: 0 0.05rem;
+  font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -756,9 +768,12 @@ export default function MainCalendar() {
                                 {DAY_RECORD_ICON[kind]}
                               </CellOvertimeStar>
                             ) : (
-                              <span key={kind} title={DAY_RECORD_LABEL[kind]}>
+                              <MarkerIcon
+                                key={kind}
+                                title={DAY_RECORD_LABEL[kind]}
+                              >
                                 {DAY_RECORD_ICON[kind]}
-                              </span>
+                              </MarkerIcon>
                             ),
                           )}
                           {recordSummary.hiddenCount > 0 && (

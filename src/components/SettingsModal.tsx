@@ -1,6 +1,7 @@
 import styled from '@emotion/styled'
 import { useCallback, useEffect, useState } from 'react'
 import { LATEST_NOTICE_ALERT_DETAIL } from '../data/notices'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 
 type ExpandedSection = null | 'terms' | 'privacy' | 'general'
 
@@ -219,6 +220,8 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [expanded, setExpanded] = useState<ExpandedSection>(null)
   const [isNotificationOn, setIsNotificationOn] = useState(true)
 
+  useBodyScrollLock(open)
+
   useEffect(() => {
     if (!open) {
       const id = requestAnimationFrame(() => {
@@ -228,12 +231,7 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
       return () => cancelAnimationFrame(id)
     }
     const id = requestAnimationFrame(() => setVisible(true))
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      cancelAnimationFrame(id)
-      document.body.style.overflow = prev
-    }
+    return () => cancelAnimationFrame(id)
   }, [open])
 
   const handleBackdrop = useCallback(() => {

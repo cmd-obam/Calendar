@@ -1,5 +1,5 @@
 import styled from '@emotion/styled'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ExerciseEntryForm from './ExerciseEntryForm'
 import {
   exerciseTemplates,
@@ -7,6 +7,7 @@ import {
   type ExerciseItem,
   type ExerciseTemplate,
 } from '../data/exerciseTemplates'
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock'
 import { useWageStore } from '../store/useWageStore'
 import { useExerciseStore } from '../store/useExerciseStore'
 import { getHolidayName } from '../utils/holidays'
@@ -52,8 +53,15 @@ const Root = styled.div<{ $open: boolean }>`
   position: fixed;
   inset: 0;
   z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
   pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
   visibility: ${({ $open }) => ($open ? 'visible' : 'hidden')};
+  /* 배경 터치 스크롤이 Root를 통해 전파되지 않도록 */
+  touch-action: none;
+  overscroll-behavior: none;
 `
 
 const Backdrop = styled.button`
@@ -67,25 +75,29 @@ const Backdrop = styled.button`
   background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(3px);
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: none;
 `
 
 const SheetWrap = styled.div`
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  max-height: min(92dvh, 100%);
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   pointer-events: none;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  min-height: 0;
+  box-sizing: border-box;
 `
 
 const Sheet = styled.div<{ $visible: boolean }>`
   pointer-events: auto;
+  touch-action: pan-y;
   width: 100%;
-  max-width: 480px;
-  max-height: min(94dvh, 100%);
+  max-height: min(92dvh, 100%);
+  min-height: 0;
   background: var(--cal-surface, #ffffff);
   color: var(--cal-text, #111827);
   border-radius: 22px 22px 0 0;
@@ -99,9 +111,11 @@ const Sheet = styled.div<{ $visible: boolean }>`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
 `
 
 const Grabber = styled.div`
+  flex-shrink: 0;
   padding: 0.5rem 0 0.25rem;
   display: flex;
   justify-content: center;
@@ -174,13 +188,34 @@ const CloseBtn = styled.button`
 `
 
 const Scroll = styled.div`
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 헤더·하단 고정 버튼 영역을 남기고 내부만 스크롤 */
+  max-height: min(68dvh, calc(92dvh - 10rem));
+  overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0.75rem 1.1rem 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+`
+
+/** 운동 기록이 많을 때 목록만 내부 스크롤해 수입·메모 접근성 유지 */
+const ExerciseList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: min(40vh, 16rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 `
 
 const SectionCard = styled.section`
@@ -560,6 +595,9 @@ export default function CalendarEntryModal({
   const [incentiveRaw, setIncentiveRaw] = useState('')
   const [isOvertime, setIsOvertime] = useState(false)
   const [memoDraft, setMemoDraft] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useBodyScrollLock(open)
 
   const resetWageForm = useCallback(() => {
     setCompanyName('')
@@ -598,14 +636,16 @@ export default function CalendarEntryModal({
       const id = requestAnimationFrame(() => setSheetVisible(false))
       return () => cancelAnimationFrame(id)
     }
-    const id = requestAnimationFrame(() => setSheetVisible(true))
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      cancelAnimationFrame(id)
-      document.body.style.overflow = prev
-    }
+    const id = requestAnimationFrame(() => {
+      setSheetVisible(true)
+      if (scrollRef.current) scrollRef.current.scrollTop = 0
+    })
+    return () => cancelAnimationFrame(id)
   }, [open])
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [view, selectedDate])
 
   const totalNum = useMemo(() => parseMoneyInput(totalRaw), [totalRaw])
   const incentiveNum = useMemo(
@@ -739,7 +779,7 @@ export default function CalendarEntryModal({
             </HeaderBlock>
           )}
 
-          <Scroll>
+          <Scroll ref={scrollRef}>
             {view === 'overview' && selectedDate && (
               <>
                 <SectionCard>
@@ -784,7 +824,7 @@ export default function CalendarEntryModal({
                     <SectionTitle>🏃 운동</SectionTitle>
                   </SectionHead>
                   {dayExercise.exercises.length > 0 ? (
-                    <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                    <ExerciseList>
                       {dayExercise.exercises.map((ex) => (
                         <ListItem key={ex.id}>
                           <ListMeta>
@@ -832,7 +872,7 @@ export default function CalendarEntryModal({
                           </div>
                         </ListItem>
                       ))}
-                    </ul>
+                    </ExerciseList>
                   ) : (
                     <EmptyText>아직 기록된 운동이 없습니다.</EmptyText>
                   )}
