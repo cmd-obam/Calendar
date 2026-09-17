@@ -29,6 +29,42 @@ function formatKRWAmount(n: number): string {
   return n.toLocaleString('ko-KR')
 }
 
+type DayRecordKind = 'overtime' | 'income' | 'exercise' | 'memo'
+
+const DAY_RECORD_PRIORITY: DayRecordKind[] = [
+  'overtime',
+  'income',
+  'exercise',
+  'memo',
+]
+
+const DAY_RECORD_ICON: Record<DayRecordKind, string> = {
+  overtime: '★',
+  income: '💰',
+  exercise: '🏃',
+  memo: '📝',
+}
+
+const DAY_RECORD_LABEL: Record<DayRecordKind, string> = {
+  overtime: '연장근무',
+  income: '수입',
+  exercise: '운동',
+  memo: '메모',
+}
+
+function buildDayRecordSummary(flags: {
+  overtime: boolean
+  income: boolean
+  exercise: boolean
+  memo: boolean
+}): { visible: DayRecordKind[]; hiddenCount: number } {
+  const kinds = DAY_RECORD_PRIORITY.filter((kind) => flags[kind])
+  return {
+    visible: kinds.slice(0, 2),
+    hiddenCount: Math.max(0, kinds.length - 2),
+  }
+}
+
 
 const AppFrame = styled.div`
   width: 100%;
@@ -197,23 +233,34 @@ const QuickLabel = styled.span`
 
 const DayMarkers = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 1px;
-  line-height: 1;
-  font-size: 0.58rem;
-  padding-top: 0.05rem;
-  max-width: 60%;
+  justify-content: flex-start;
+  gap: 0.18rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
+  line-height: 1;
+  font-size: 0.62rem;
+  flex-shrink: 0;
 `
 
 const CellOvertimeStar = styled.span`
   color: #dc2626;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   line-height: 1;
   flex-shrink: 0;
   font-weight: 700;
+`
+
+const HiddenCount = styled.span`
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--cal-text-dim, #6b7280);
+  line-height: 1;
 `
 
 const CalendarSection = styled.div`
@@ -370,8 +417,7 @@ const DayHeader = styled.div`
   width: 100%;
   min-width: 0;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.15rem;
+  justify-content: flex-start;
   flex-shrink: 0;
   overflow: hidden;
 `
@@ -636,9 +682,16 @@ export default function MainCalendar() {
                 dateKey != null ? getHolidayName(dateKey) : undefined
               const isHoliday = holidayName != null
               const dayEx = dateKey ? exerciseRecords[dateKey] : undefined
+              const hasIncome = log != null
               const hasExercise = Boolean(dayEx?.exercises?.length)
               const hasMemo = Boolean(dayEx?.memo?.trim())
               const hasOvertime = Boolean(log?.isOvertime)
+              const recordSummary = buildDayRecordSummary({
+                overtime: hasOvertime,
+                income: hasIncome,
+                exercise: hasExercise,
+                memo: hasMemo,
+              })
 
               return (
                 <DayCell
@@ -652,7 +705,7 @@ export default function MainCalendar() {
                   onClick={() => handleDateClick(day)}
                   aria-label={
                     dateKey
-                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${log ? ', 수입 있음' : ''}${hasOvertime ? ', 연장근무' : ''}${hasExercise ? ', 운동 있음' : ''}${hasMemo ? ', 메모 있음' : ''}${log && showAmounts ? `, ${formatKRW(log.finalWage)}` : ''}`
+                      ? `${dateKey}${holidayName ? `, ${holidayName}` : ''}${hasIncome ? ', 수입 있음' : ''}${hasOvertime ? ', 연장근무' : ''}${hasExercise ? ', 운동 있음' : ''}${hasMemo ? ', 메모 있음' : ''}${log && showAmounts ? `, ${formatKRW(log.finalWage)}` : ''}`
                       : '빈 칸'
                   }
                 >
@@ -665,15 +718,36 @@ export default function MainCalendar() {
                         >
                           {day}
                         </DayNum>
-                        <DayMarkers aria-hidden>
-                          {hasOvertime && (
-                            <CellOvertimeStar title="연장근무">★</CellOvertimeStar>
-                          )}
-                          {log && <span title="수입">💰</span>}
-                          {hasExercise && <span title="운동">🏃</span>}
-                          {hasMemo && <span title="메모">📝</span>}
-                        </DayMarkers>
                       </DayHeader>
+                      {recordSummary.visible.length > 0 && (
+                        <DayMarkers
+                          aria-label={recordSummary.visible
+                            .map((kind) => DAY_RECORD_LABEL[kind])
+                            .concat(
+                              recordSummary.hiddenCount > 0
+                                ? [`외 ${recordSummary.hiddenCount}개`]
+                                : [],
+                            )
+                            .join(', ')}
+                        >
+                          {recordSummary.visible.map((kind) =>
+                            kind === 'overtime' ? (
+                              <CellOvertimeStar key={kind} title="연장근무">
+                                {DAY_RECORD_ICON[kind]}
+                              </CellOvertimeStar>
+                            ) : (
+                              <span key={kind} title={DAY_RECORD_LABEL[kind]}>
+                                {DAY_RECORD_ICON[kind]}
+                              </span>
+                            ),
+                          )}
+                          {recordSummary.hiddenCount > 0 && (
+                            <HiddenCount>
+                              +{recordSummary.hiddenCount}
+                            </HiddenCount>
+                          )}
+                        </DayMarkers>
+                      )}
                       <DayRecords>
                         {log &&
                           (showAmounts ? (
